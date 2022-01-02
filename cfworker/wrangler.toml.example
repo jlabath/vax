@@ -1,0 +1,40 @@
+name = "vax"
+type = "javascript"
+account_id = "3a????????????????????"
+
+# START WHERE
+# This field specifies that the Worker
+# will be deployed to a *.workers.dev domain
+# workers_dev = true
+# -- OR --
+# These fields specify that the Worker
+# will deploy to a custom domain
+zone_id = "2f??????????????????????"
+routes = ["vax.labath.ca/*"]
+# END WHERE
+
+compatibility_date = "2021-12-17"
+
+# define kv
+# to get preview ids https://stackoverflow.com/questions/63332306/what-are-cloudflare-kv-preview-ids-and-how-to-get-one
+kv_namespaces = [
+  { binding = "VAXKV", id = "ef?????????????????????", preview_id = "21????????????????????????????" }
+]
+
+[vars]
+WORKERS_RS_VERSION = "0.0.7"
+
+[build]
+command = "cargo install -q worker-build && worker-build --release" # required
+
+[build.upload]
+dir    = "build/worker"
+format = "modules"
+main   = "./shim.mjs"
+
+[[build.upload.rules]]
+globs = ["**/*.wasm"]
+type  = "CompiledWasm"
+
+# read more about configuring your Worker via wrangler.toml at:
+# https://developers.cloudflare.com/workers/cli-wrangler/configuration

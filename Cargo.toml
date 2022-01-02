@@ -1,0 +1,10 @@
+[workspace]
+
+members = [
+    "ontariopublic",
+    "import",
+]
+
+exclude = [
+    "cfworker",
+]

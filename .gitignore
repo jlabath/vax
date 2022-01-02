@@ -1,0 +1,6 @@
+/target
+**/*.rs.bk
+cfworker/wasm-pack.log
+cfworker/build/
+cfworker/target/
+cfworker/wrangler.toml
