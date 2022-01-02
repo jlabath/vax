@@ -32,6 +32,7 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     let res = router
         .get_async("/", index_view)
         .get_async("/d/:date/", day_view)
+        .get_async("/di/:idx/", idx_view)
         .get("/style.css", css_view)
         .get("/worker-version", |_, ctx| {
             let version = ctx.var("WORKERS_RS_VERSION")?.to_string();
@@ -57,6 +58,15 @@ static TOP: &str = r#"<!DOCTYPE html>
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>vax.labath.ca</title>
     <link rel="stylesheet" href="/style.css">
+    <script>
+      window.onload = (event) => {
+        var slider = document.getElementById("dayRange");
+        slider.onchange = (event) => {
+          let url = "/di/"+slider.value+"/";
+          window.location.assign(url);
+        };
+      };
+    </script>
   </head>
   <body>"#;
 
@@ -89,10 +99,14 @@ static TABLE: &str = r#"
   </tr>
 </table>
 </div>
+<div class="slidecontainer">
+  <input type="range" min="0" max="_MAX_RANGE_VAR_" value="_CUR_RANGE_VAR_" class="slider" id="dayRange">
+</div>
 <div id="nav_buttons">
 _PREV_VAR_
 _NEXT_VAR_
 </div>
+<div><a href="https://github.com/jlabath/vax">source code</a></div>
 "#;
 
 fn dec_to_string(d: Decimal) -> String {
@@ -135,6 +149,12 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
         "_HOSP_RATE_2VAX_",
         &dec_to_string(report.nonicu_full_vac_rate_per100k()),
     );
+    let body = body.replace("_MAX_RANGE_VAR_", &index.max_idx().to_string());
+    let idx = match index.idx(report.key()) {
+        Some(i) => i,
+        None => index.max_idx(),
+    };
+    let body = body.replace("_CUR_RANGE_VAR_", &idx.to_string());
 
     let prev = match index.prev(report.key()) {
         Some(prev) => {
@@ -194,6 +214,26 @@ async fn day_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
             let index = get_index(&kv).await?;
             let report = get_report(&kv, key).await?;
             render_report(&index, &report)
+        }
+        None => Response::error("Bad Request", 400),
+    }
+}
+
+async fn idx_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    match ctx.param("idx") {
+        Some(sidx) => {
+            let kv = ctx.kv("VAXKV")?;
+            let index = get_index(&kv).await?;
+            if let Ok(idx) = sidx.parse::<usize>() {
+                let key = match index.get(idx) {
+                    Some(k) => k,
+                    None => "fail".to_string(),
+                };
+                let report = get_report(&kv, &key).await?;
+                render_report(&index, &report)
+            } else {
+                Response::error("Bad Request", 400)
+            }
         }
         None => Response::error("Bad Request", 400),
     }

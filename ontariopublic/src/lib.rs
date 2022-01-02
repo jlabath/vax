@@ -371,6 +371,24 @@ impl Index {
             Err(_) => None,
         }
     }
+
+    pub fn max_idx(&self) -> usize {
+        self.keys.len() - 1
+    }
+
+    pub fn get(&self, idx: usize) -> Option<String> {
+        match self.keys.get(idx) {
+            None => None,
+            Some(v) => Some(v.to_string()),
+        }
+    }
+
+    pub fn idx(&self, key: String) -> Option<usize> {
+        match self.keys.binary_search(&key) {
+            Ok(idx) => Some(idx),
+            Err(_) => None,
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]
