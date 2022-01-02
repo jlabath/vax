@@ -242,7 +242,7 @@ async fn idx_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
 static CSS: &str = r#"
 body {
   background-color: white;
-  padding-left: 11px;
+  padding-left: 1em;
 }
 table, th, td {
   border: 1px solid black;
@@ -252,26 +252,32 @@ table {
 }
 td, th {
   text-align: center;
-  padding: 15px;
+  padding: 1em;
   vertical-align: middle;
 }
 .slidecontainer {
-  height: 60px;
+  height: 4em;
   /* Center vertically */
   display: flex;
   align-items: center;
+  width: 21em;
 }
 #nav_buttons {
-  height: 50px;
+  height: 4em;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 50vh;
+  width: 21em;
 }
 #footer {
-  height: 120px;
+  height: 8em;
   display: flex;
   align-items: end;
+  width: 21em;
+  justify-content: center;
+}
+#dayRange {
+  width: 100%;
 }
 "#;
 
