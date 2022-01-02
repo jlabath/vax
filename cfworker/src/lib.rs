@@ -78,24 +78,24 @@ static TABLE: &str = r#"
 <div>
 <table>
   <tr>
-    <th>Rate per 100,000</th>
-    <th>0 doses</th>
-    <th>2 doses</th>
+    <td>Rate per 100,000</td>
+    <td>0 doses</td>
+    <td>2 doses</td>
   </tr>
   <tr>
-    <th>Tested positive</th>
-    <td>_INF_RATE_UNVAX_</td>
-    <td>_INF_RATE_2VAX_</td>
+    <td>Tested positive</td>
+    <th>_INF_RATE_UNVAX_</th>
+    <th>_INF_RATE_2VAX_</th>
   </tr>
   <tr>
-    <th>Hospitalized not in ICU</th>
-    <td>_HOSP_RATE_UNVAX_</td>
-    <td>_HOSP_RATE_2VAX_</td>
+    <td>Hospitalized not in ICU</td>
+    <th>_HOSP_RATE_UNVAX_</th>
+    <th>_HOSP_RATE_2VAX_</th>
   </tr>
   <tr>
-    <th>Hospitalized in ICU</th>
-    <td>_ICU_RATE_UNVAX_</td>
-    <td>_ICU_RATE_2VAX_</td>
+    <td>Hospitalized in ICU</td>
+    <th>_ICU_RATE_UNVAX_</th>
+    <th>_ICU_RATE_2VAX_</th>
   </tr>
 </table>
 </div>
@@ -106,7 +106,7 @@ static TABLE: &str = r#"
 _PREV_VAR_
 _NEXT_VAR_
 </div>
-<div><a href="https://github.com/jlabath/vax">source code</a></div>
+<div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
 "#;
 
 fn dec_to_string(d: Decimal) -> String {
@@ -242,6 +242,7 @@ async fn idx_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
 static CSS: &str = r#"
 body {
   background-color: white;
+  padding-left: 11px;
 }
 table, th, td {
   border: 1px solid black;
@@ -253,6 +254,24 @@ td, th {
   text-align: center;
   padding: 15px;
   vertical-align: middle;
+}
+.slidecontainer {
+  height: 60px;
+  /* Center vertically */
+  display: flex;
+  align-items: center;
+}
+#nav_buttons {
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 50vh;
+}
+#footer {
+  height: 120px;
+  display: flex;
+  align-items: end;
 }
 "#;
 
