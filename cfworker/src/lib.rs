@@ -33,6 +33,9 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
         .get_async("/", index_view)
         .get_async("/d/:date/", day_view)
         .get_async("/di/:idx/", idx_view)
+        .get_async("/ch/ca/", chart_cases_view)
+        .get_async("/ch/ni/", chart_nonicu_view)
+        .get_async("/ch/ii/", chart_icu_view)
         .get("/style.css", css_view)
         .get("/worker-version", |_, ctx| {
             let version = ctx.var("WORKERS_RS_VERSION")?.to_string();
@@ -50,14 +53,16 @@ pub async fn main(req: Request, env: Env) -> Result<Response> {
     }
 }
 
-static TOP: &str = r#"<!DOCTYPE html>
+static SIMPLETOP: &str = r#"<!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>vax.labath.ca</title>
-    <link rel="stylesheet" href="/style.css">
+    <link rel="stylesheet" href="/style.css">"#;
+
+static REPORT_JS: &str = r#"
     <script>
       window.onload = (event) => {
         var slider = document.getElementById("dayRange");
@@ -83,17 +88,17 @@ static TABLE: &str = r#"
     <td>2 doses</td>
   </tr>
   <tr>
-    <td>Tested positive</td>
+    <td><a href="/ch/ca/">Tested positive</a></td>
     <th>_INF_RATE_UNVAX_</th>
     <th>_INF_RATE_2VAX_</th>
   </tr>
   <tr>
-    <td>Hospitalized not in ICU</td>
+    <td><a href="/ch/ni/">Hospitalized not in ICU</a></td>
     <th>_HOSP_RATE_UNVAX_</th>
     <th>_HOSP_RATE_2VAX_</th>
   </tr>
   <tr>
-    <td>Hospitalized in ICU</td>
+    <td><a href="/ch/ii/">Hospitalized in ICU</a></td>
     <th>_ICU_RATE_UNVAX_</th>
     <th>_ICU_RATE_2VAX_</th>
   </tr>
@@ -177,7 +182,8 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
     };
     let body = body.replace("_NEXT_VAR_", &next);
     let mut body = body;
-    body.insert_str(0, TOP);
+    body.insert_str(0, SIMPLETOP);
+    body.insert_str(SIMPLETOP.len(), REPORT_JS);
     body.push_str(BOTTOM);
     Response::from_html(body)
 }
@@ -286,7 +292,118 @@ fn css_view(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
     let mut headers = Headers::new();
     headers.set("content-type", "text/css")?;
     //tell browser to cache for few seconds
-    headers.set("cache-control", "max-age=60")?;
+    headers.set("cache-control", "max-age=120")?;
     let resp = resp.with_headers(headers);
     Ok(resp)
+}
+
+async fn chart_cases_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let kv = ctx.kv("VAXKV")?;
+    let dose0 = get_kvval(&kv, "cases_dose0").await?.as_string();
+    let dose2 = get_kvval(&kv, "cases_dose2").await?.as_string();
+    let title =
+        "<h3>Covid-19 cases by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+    chart_response(&kv, title, &dose0, &dose2).await
+}
+
+static CHART_JS: &str = r#"
+window.onload = (event) => {
+  const data = {
+    labels: labels,
+    datasets: [{
+      label: 'Population with 0 doses of the vaccine',
+      data: dose0,
+      fill: false,
+      borderColor: 'red',
+      tension: 0.1
+    },{
+      label: 'Population with 2 doses of the vaccine',
+      data: dose2,
+      fill: false,
+      borderColor: 'green',
+      tension: 0.1
+    }]
+  };
+  const config = {
+    type: 'line',
+    data: data,
+    options: {
+      responsive: true
+    }
+  };
+  const myChart = new Chart(
+    document.getElementById('myChart'),
+     config
+  );
+}
+"#;
+
+async fn chart_response(
+    kv: &kv::KvStore,
+    title: &str,
+    dose0: &str,
+    dose2: &str,
+) -> Result<Response> {
+    let labels = get_kvval(&kv, "labels").await?.as_string();
+    let mut body = String::with_capacity(1024 * 5); //5k
+    body.push_str(SIMPLETOP);
+    body.push_str(
+        r#"
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+<script>
+  const labels = "#,
+    );
+    body.push_str(&labels);
+    body.push_str(
+        r#";
+  const dose0 = "#,
+    );
+    body.push_str(dose0);
+    body.push_str(
+        r#";
+  const dose2 = "#,
+    );
+    body.push_str(dose2);
+    body.push_str(";");
+    body.push_str(CHART_JS);
+    body.push_str("</script></head><body>");
+    body.push_str(title);
+    body.push_str(
+        r#"
+<div class="chart-container" style="position: relative; height:80vh; width:95vw">
+  <canvas id="myChart"></canvas>
+</div>"#,
+    );
+    body.push_str(BOTTOM);
+    Response::from_html(body)
+}
+
+async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
+    let value = kv.get(key).await?;
+    match value {
+        Some(kval) => Ok(kval),
+        None => {
+            let mut msg = String::from("No such value in keystore ");
+            msg.push_str(key);
+            Err(msg.into())
+        }
+    }
+}
+
+async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let kv = ctx.kv("VAXKV")?;
+    let dose0 = get_kvval(&kv, "nonicu_dose0").await?.as_string();
+    let dose2 = get_kvval(&kv, "nonicu_dose2").await?.as_string();
+    let title =
+        "<h3>Covid-19 hospitalizations (not in ICU) by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+    chart_response(&kv, title, &dose0, &dose2).await
+}
+
+async fn chart_icu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    let kv = ctx.kv("VAXKV")?;
+    let dose0 = get_kvval(&kv, "icu_dose0").await?.as_string();
+    let dose2 = get_kvval(&kv, "icu_dose2").await?.as_string();
+    let title =
+        "<h3>Covid-19 hospitalization in ICU by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+    chart_response(&kv, title, &dose0, &dose2).await
 }
