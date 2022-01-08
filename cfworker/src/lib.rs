@@ -185,32 +185,19 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
     body.insert_str(0, SIMPLETOP);
     body.insert_str(SIMPLETOP.len(), REPORT_JS);
     body.push_str(BOTTOM);
-    Response::from_html(body)
+    craft_response("text/html", &body)
 }
 
 async fn get_index(kv: &kv::KvStore) -> Result<Index> {
-    let value = kv.get("index").await?;
-    match value {
-        Some(kval) => {
-            let index: Index = kval.as_json()?;
-            Ok(index)
-        }
-        None => Err("Index object not found".into()),
-    }
+    let kval = get_kvval(kv, "index").await?;
+    let index: Index = kval.as_json()?;
+    Ok(index)
 }
 
 async fn get_report(kv: &kv::KvStore, key: &str) -> Result<DayReport> {
-    let value = kv.get(key).await?;
-    match value {
-        Some(kval) => {
-            let rep: DayReport = kval.as_json()?;
-            Ok(rep)
-        }
-        None => {
-            let msg = String::from("Report object ");
-            Err(msg.into())
-        }
-    }
+    let kval = get_kvval(kv, key).await?;
+    let rep: DayReport = kval.as_json()?;
+    Ok(rep)
 }
 
 async fn day_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -288,13 +275,7 @@ td, th {
 "#;
 
 fn css_view(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
-    let resp = Response::ok(CSS)?;
-    let mut headers = Headers::new();
-    headers.set("content-type", "text/css")?;
-    //tell browser to cache for few seconds
-    headers.set("cache-control", "max-age=120")?;
-    let resp = resp.with_headers(headers);
-    Ok(resp)
+    craft_response("text/css", CSS)
 }
 
 async fn chart_cases_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -370,12 +351,24 @@ async fn chart_response(
     body.push_str(title);
     body.push_str(
         r#"
+<div><a href="/" alt="home">&#8701; home</a></div>
 <div class="chart-container" style="position: relative; height:80vh; width:95vw">
   <canvas id="myChart"></canvas>
-</div>"#,
+</div>
+"#,
     );
     body.push_str(BOTTOM);
-    Response::from_html(body)
+    craft_response("text/html", &body)
+}
+
+fn craft_response(content_type: &str, body: &str) -> Result<Response> {
+    let data = body.as_bytes().to_vec();
+    let mut resp = Response::from_body(ResponseBody::Body(data))?;
+    let headers = resp.headers_mut();
+    headers.set("content-type", content_type)?;
+    //tell browser to cache for few seconds
+    headers.set("cache-control", "max-age=180")?;
+    Ok(resp)
 }
 
 async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
@@ -383,7 +376,7 @@ async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
     match value {
         Some(kval) => Ok(kval),
         None => {
-            let mut msg = String::from("No such value in keystore ");
+            let mut msg = String::from("No such value in keystore -> ");
             msg.push_str(key);
             Err(msg.into())
         }
