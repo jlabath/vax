@@ -20,9 +20,13 @@ fn main() -> Result<()> {
     let f = File::open(FNAME).with_context(|| format!("Failed to read from {}", FNAME))?;
     let br = BufReader::new(f);
     let cases_by_vac: CasesByVacStatusRoot = serde_json::from_reader(br)?;
+    //validate the root object of cases
+    cases_by_vac.validate()?;
     let f_hosp = File::open(HFNAME).with_context(|| format!("Failed to read from {}", HFNAME))?;
     let br_hosp = BufReader::new(f_hosp);
     let hosp_by_vac: HospitalizationByVacStatusRoot = serde_json::from_reader(br_hosp)?;
+    //validate the root of hospitalizations by status
+    hosp_by_vac.validate()?;
     let mut hosp_map = HashMap::new();
     let mut reports = vec![];
     let mut entries = vec![];

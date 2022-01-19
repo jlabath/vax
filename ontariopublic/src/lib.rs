@@ -14,6 +14,8 @@ pub enum DataError {
     Int(#[from] std::num::ParseIntError),
     #[error("unable to parse Decimal from `{0}`")]
     Decimal(#[from] rust_decimal::Error),
+    #[error("{0}")]
+    Problem(String),
 }
 
 //just some alias for smaller function signatures
@@ -23,6 +25,90 @@ pub type Result<T> = std::result::Result<T, DataError>;
 pub struct CasesByVacStatusRoot {
     pub fields: Vec<HeaderField>,
     pub records: Vec<Vec<serde_json::Value>>,
+}
+
+impl CasesByVacStatusRoot {
+    pub fn validate(&self) -> Result<()> {
+        let expected = self.expected_header();
+        if self.fields.len() != expected.len() {
+            let msg = format!("the expected headers and received headers have different length expected: {} actual: {}", expected.len(), self.fields.len());
+            return Err(DataError::Problem(msg.to_string()));
+        }
+        //ok if the same length zip together and compare
+        let zipped = self.fields.iter().zip(expected.iter());
+        for (a, b) in zipped {
+            if *a != *b {
+                let msg = format!(
+                    "The two header fields do not match left: {:?} right: {:?}",
+                    a, b
+                );
+                return Err(DataError::Problem(msg.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn expected_header(&self) -> Vec<HeaderField> {
+        let mut r = vec![];
+        r.push(HeaderField::new("_id", "int", Default::default()));
+        r.push(HeaderField::new(
+            "Date",
+            "timestamp",
+            HeaderFieldInfo::new("", "timestamp", ""),
+        ));
+        r.push(HeaderField::new(
+            "covid19_cases_unvac",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "covid19_cases_partial_vac",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "covid19_cases_full_vac",
+            "text",
+            Default::default(),
+        ));
+
+        r.push(HeaderField::new(
+            "covid19_cases_vac_unknown",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_unvac_rate_per100K",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_partial_vac_rate_per100K",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_full_vac_rate_per100K",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_unvac_rate_7ma",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_partial_vac_rate_7ma",
+            "text",
+            Default::default(),
+        ));
+        r.push(HeaderField::new(
+            "cases_full_vac_rate_7ma",
+            "text",
+            Default::default(),
+        ));
+        r
+    }
 }
 
 impl IntoIterator for CasesByVacStatusRoot {
@@ -55,8 +141,41 @@ impl Iterator for CasesByVacStatusRootIterator {
     }
 }
 
-#[derive(Deserialize, Debug)]
-pub struct HeaderField {}
+#[derive(Deserialize, Debug, Default, PartialEq)]
+pub struct HeaderField {
+    id: String,
+    #[serde(rename = "type")]
+    field_type: String,
+    #[serde(default)]
+    info: HeaderFieldInfo,
+}
+
+impl HeaderField {
+    fn new(id: &str, field_type: &str, inf: HeaderFieldInfo) -> Self {
+        HeaderField {
+            id: id.to_string(),
+            field_type: field_type.to_string(),
+            info: inf,
+        }
+    }
+}
+
+#[derive(Deserialize, Debug, Default, PartialEq)]
+pub struct HeaderFieldInfo {
+    notes: String,
+    type_override: String,
+    label: String,
+}
+
+impl HeaderFieldInfo {
+    fn new(notes: &str, type_override: &str, label: &str) -> Self {
+        HeaderFieldInfo {
+            notes: notes.to_string(),
+            type_override: type_override.to_string(),
+            label: label.to_string(),
+        }
+    }
+}
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CasesByVacStatus {
@@ -291,6 +410,29 @@ impl DayReport {
                 "cases and hospitalization dates do not match".into(),
             ));
         }
+        //test calculations
+        let hundred_k = Decimal::new(100000, 0);
+        let num = (self.cases.calc_unvac_population()
+            * (self.cases.cases_unvac_rate_per100k / hundred_k))
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+        if num != Decimal::new(self.cases.covid19_cases_unvac, 0) {
+            let msg = format!(
+                "The unvac cases did not match calculated: {} expected: {}",
+                num, self.cases.covid19_cases_unvac
+            );
+            return Err(DataError::Problem(msg.to_string()));
+        }
+        let num = (self.cases.calc_full_vac_population()
+            * (self.cases.cases_full_vac_rate_per100k / hundred_k))
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+        if num != Decimal::new(self.cases.covid19_cases_full_vac, 0) {
+            let msg = format!(
+                "The full vac cases did not match calculated: {} expected: {}",
+                num, self.cases.covid19_cases_full_vac
+            );
+            return Err(DataError::Problem(msg.to_string()));
+        }
+
         Ok(())
     }
 
@@ -395,6 +537,70 @@ impl Index {
 pub struct HospitalizationByVacStatusRoot {
     pub fields: Vec<HeaderField>,
     pub records: Vec<Vec<serde_json::Value>>,
+}
+
+impl HospitalizationByVacStatusRoot {
+    pub fn validate(&self) -> Result<()> {
+        let expected = self.expected_header();
+        if self.fields.len() != expected.len() {
+            let msg = format!("the expected headers and received headers have different length expected: {} actual: {}", expected.len(), self.fields.len());
+            return Err(DataError::Problem(msg.to_string()));
+        }
+        //ok if the same length zip together and compare
+        let zipped = self.fields.iter().zip(expected.iter());
+        for (a, b) in zipped {
+            if *a != *b {
+                let msg = format!(
+                    "The two header fields do not match left: {:?} right: {:?}",
+                    a, b
+                );
+                return Err(DataError::Problem(msg.to_string()));
+            }
+        }
+        Ok(())
+    }
+
+    fn expected_header(&self) -> Vec<HeaderField> {
+        let mut r = vec![];
+        r.push(HeaderField::new("_id", "int", Default::default()));
+        r.push(HeaderField::new(
+            "date",
+            "timestamp",
+            HeaderFieldInfo::new("", "timestamp", ""),
+        ));
+        r.push(HeaderField::new(
+            "icu_unvac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+        r.push(HeaderField::new(
+            "icu_partial_vac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+        r.push(HeaderField::new(
+            "icu_full_vac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+        r.push(HeaderField::new(
+            "hospitalnonicu_unvac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+        r.push(HeaderField::new(
+            "hospitalnonicu_partial_vac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+        r.push(HeaderField::new(
+            "hospitalnonicu_full_vac",
+            "numeric",
+            HeaderFieldInfo::new("", "numeric", ""),
+        ));
+
+        r
+    }
 }
 
 impl IntoIterator for HospitalizationByVacStatusRoot {

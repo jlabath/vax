@@ -4,3 +4,4 @@ cfworker/wasm-pack.log
 cfworker/build/
 cfworker/target/
 cfworker/wrangler.toml
+import/bulk.json
