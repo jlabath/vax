@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{DateTime, NaiveDate, NaiveDateTime, Utc};
 use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use serde_json;
@@ -474,6 +474,7 @@ impl DayReport {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Index {
     keys: Vec<String>,
+    pub updated: DateTime<Utc>,
 }
 
 impl Index {
@@ -483,7 +484,10 @@ impl Index {
             v.push(String::from(s.as_ref()));
         }
         v.sort_unstable();
-        Index { keys: v }
+        Index {
+            keys: v,
+            updated: Utc::now(),
+        }
     }
 
     pub fn most_recent(&self) -> String {

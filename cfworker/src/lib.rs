@@ -111,7 +111,9 @@ static TABLE: &str = r#"
 _PREV_VAR_
 _NEXT_VAR_
 </div>
+
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
+<div id="updated"><h5>Last updated: _UPDATED_VAR_</h5></div>
 "#;
 
 fn dec_to_string(d: Decimal) -> String {
@@ -129,6 +131,7 @@ async fn index_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
 fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
     let body = String::from(TABLE);
     let date = report.cases.date.format("%A, %-d %B, %C%y").to_string();
+    let updated = index.updated.to_rfc2822();
     let body = body.replace("_DATE_VAR_", &date);
     let body = body.replace(
         "_INF_RATE_UNVAX_",
@@ -181,6 +184,7 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
         None => "".to_string(),
     };
     let body = body.replace("_NEXT_VAR_", &next);
+    let body = body.replace("_UPDATED_VAR_", &updated);
     let mut body = body;
     body.insert_str(0, SIMPLETOP);
     body.insert_str(SIMPLETOP.len(), REPORT_JS);
@@ -264,6 +268,13 @@ td, th {
 }
 #footer {
   height: 8em;
+  display: flex;
+  align-items: end;
+  width: 21em;
+  justify-content: center;
+}
+#updated {
+  height: 4em;
   display: flex;
   align-items: end;
   width: 21em;
