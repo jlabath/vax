@@ -158,10 +158,7 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
         &dec_to_string(report.nonicu_full_vac_rate_per100k()),
     );
     let body = body.replace("_MAX_RANGE_VAR_", &index.max_idx().to_string());
-    let idx = match index.idx(report.key()) {
-        Some(i) => i,
-        None => index.max_idx(),
-    };
+    let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
     let body = body.replace("_CUR_RANGE_VAR_", &idx.to_string());
 
     let prev = match index.prev(report.key()) {
@@ -384,14 +381,11 @@ fn craft_response(content_type: &str, body: &str) -> Result<Response> {
 
 async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
     let value = kv.get(key).await?;
-    match value {
-        Some(kval) => Ok(kval),
-        None => {
-            let mut msg = String::from("No such value in keystore -> ");
-            msg.push_str(key);
-            Err(msg.into())
-        }
-    }
+    value.ok_or_else(|| {
+        let mut msg = String::from("No such value in keystore -> ");
+        msg.push_str(key);
+        msg.into()
+    })
 }
 
 async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
