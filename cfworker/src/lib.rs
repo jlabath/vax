@@ -2,8 +2,6 @@ use ontariopublic::{DayReport, Index};
 use rust_decimal::{Decimal, RoundingStrategy};
 use worker::*;
 
-mod utils;
-
 fn log_request(req: &Request) {
     console_log!(
         "{} - [{}], located at: {:?}, within: {}",
@@ -15,11 +13,8 @@ fn log_request(req: &Request) {
 }
 
 #[event(fetch)]
-pub async fn main(req: Request, env: Env) -> Result<Response> {
+pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     log_request(&req);
-
-    // Optionally, get more helpful error messages written to the console in the case of a panic.
-    utils::set_panic_hook();
 
     // Optionally, use the Router to handle matching endpoints, use ":name" placeholders, or "*name"
     // catch-alls to match on specific patterns. Alternatively, use `Router::with_data(D)` to
@@ -190,15 +185,17 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
 }
 
 async fn get_index(kv: &kv::KvStore) -> Result<Index> {
-    let kval = get_kvval(kv, "index").await?;
-    let index: Index = kval.as_json()?;
-    Ok(index)
+    let index_opt = kv.get("index").json().await?;
+    index_opt.ok_or_else(|| "Could not fetch index".into())
 }
 
 async fn get_report(kv: &kv::KvStore, key: &str) -> Result<DayReport> {
-    let kval = get_kvval(kv, key).await?;
-    let rep: DayReport = kval.as_json()?;
-    Ok(rep)
+    let opt = kv.get(key).json().await?;
+    opt.ok_or_else(|| {
+        let mut msg = String::from("Could not fetch report: ");
+        msg.push_str(key);
+        msg.into()
+    })
 }
 
 async fn day_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -288,8 +285,8 @@ fn css_view(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
 
 async fn chart_cases_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let kv = ctx.kv("VAXKV")?;
-    let dose0 = get_kvval(&kv, "cases_dose0").await?.as_string();
-    let dose2 = get_kvval(&kv, "cases_dose2").await?.as_string();
+    let dose0 = get_kvval(&kv, "cases_dose0").await?;
+    let dose2 = get_kvval(&kv, "cases_dose2").await?;
     let title =
         "<h3>Covid-19 cases by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
@@ -333,7 +330,7 @@ async fn chart_response(
     dose0: &str,
     dose2: &str,
 ) -> Result<Response> {
-    let labels = get_kvval(&kv, "labels").await?.as_string();
+    let labels = get_kvval(&kv, "labels").await?;
     let mut body = String::with_capacity(1024 * 5); //5k
     body.push_str(SIMPLETOP);
     body.push_str(
@@ -379,8 +376,8 @@ fn craft_response(content_type: &str, body: &str) -> Result<Response> {
     Ok(resp)
 }
 
-async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
-    let value = kv.get(key).await?;
+async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<String> {
+    let value = kv.get(key).text().await?;
     value.ok_or_else(|| {
         let mut msg = String::from("No such value in keystore -> ");
         msg.push_str(key);
@@ -390,8 +387,8 @@ async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<kv::KvValue> {
 
 async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let kv = ctx.kv("VAXKV")?;
-    let dose0 = get_kvval(&kv, "nonicu_dose0").await?.as_string();
-    let dose2 = get_kvval(&kv, "nonicu_dose2").await?.as_string();
+    let dose0 = get_kvval(&kv, "nonicu_dose0").await?;
+    let dose2 = get_kvval(&kv, "nonicu_dose2").await?;
     let title =
         "<h3>Covid-19 hospitalizations (not in ICU) by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
@@ -399,8 +396,8 @@ async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Respo
 
 async fn chart_icu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let kv = ctx.kv("VAXKV")?;
-    let dose0 = get_kvval(&kv, "icu_dose0").await?.as_string();
-    let dose2 = get_kvval(&kv, "icu_dose2").await?.as_string();
+    let dose0 = get_kvval(&kv, "icu_dose0").await?;
+    let dose2 = get_kvval(&kv, "icu_dose2").await?;
     let title =
         "<h3>Covid-19 hospitalization in ICU by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
