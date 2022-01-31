@@ -123,7 +123,7 @@ async fn index_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     render_report(&index, &report)
 }
 
-fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
+pub fn render_report_str_old(index: &Index, report: &DayReport) -> String {
     let body = String::from(TABLE);
     let date = report.cases.date.format("%A, %-d %B, %C%y").to_string();
     let updated = index.updated.to_rfc2822();
@@ -181,6 +181,82 @@ fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
     body.insert_str(0, SIMPLETOP);
     body.insert_str(SIMPLETOP.len(), REPORT_JS);
     body.push_str(BOTTOM);
+    body
+}
+
+pub fn render_report_str(index: &Index, report: &DayReport) -> String {
+    let date = report.cases.date.format("%A, %-d %B, %C%y").to_string();
+    let updated = index.updated.to_rfc2822();
+    let inf_rate_unvax = dec_to_string(report.cases.cases_unvac_rate_per100k);
+    let inf_rate_2vax = dec_to_string(report.cases.cases_full_vac_rate_per100k);
+    let icu_rate_unvax = dec_to_string(report.icu_unvac_rate_per100k());
+    let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
+    let hosp_rate_unvax = dec_to_string(report.nonicu_unvac_rate_per100k());
+    let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
+    let max_idx = index.max_idx();
+    let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
+    let prev = match index.prev(report.key()) {
+        Some(prev) => {
+            let mut s = String::from("<A HREF=\"/d/");
+            s.push_str(&prev);
+            s.push_str("/\">Previous</A>");
+            s
+        }
+        None => "".to_string(),
+    };
+    let next = match index.next(report.key()) {
+        Some(next) => {
+            let mut s = String::from("<A HREF=\"/d/");
+            s.push_str(&next);
+            s.push_str("/\">Next</A>");
+            s
+        }
+        None => "".to_string(),
+    };
+    format!(
+        r#"{SIMPLETOP}{REPORT_JS}
+<h3>Report for {date}</h3>
+<h3>Covid-19 per capita comparison by vaccination status in Ontario, Canada.</h3>
+<div>
+<table>
+  <tr>
+    <td>Rate per 100,000</td>
+    <td>0 doses</td>
+    <td>2 doses</td>
+  </tr>
+  <tr>
+    <td><a href="/ch/ca/">Tested positive</a></td>
+    <th>{inf_rate_unvax}</th>
+    <th>{inf_rate_2vax}</th>
+  </tr>
+  <tr>
+    <td><a href="/ch/ni/">Hospitalized not in ICU</a></td>
+    <th>{hosp_rate_unvax}</th>
+    <th>{hosp_rate_2vax}</th>
+  </tr>
+  <tr>
+    <td><a href="/ch/ii/">Hospitalized in ICU</a></td>
+    <th>{icu_rate_unvax}</th>
+    <th>{icu_rate_2vax}</th>
+  </tr>
+</table>
+</div>
+<div class="slidecontainer">
+  <input type="range" min="0" max="{max_idx}" value="{idx}" class="slider" id="dayRange">
+</div>
+<div id="nav_buttons">
+{next}
+{prev}
+</div>
+<div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
+<div id="updated"><h5>Last updated: {updated}</h5></div>
+{BOTTOM}
+"#
+    )
+}
+
+fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
+    let body = render_report_str(index, report);
     craft_response("text/html", &body)
 }
 

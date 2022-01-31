@@ -7,6 +7,14 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[dev-dependencies]
+criterion = "0.3"
+chrono = { version = "0.4", features = [ "serde" ] }
+
+[[bench]]
+name = "my_benchmark"
+harness = false
+
 [features]
 default = []
 

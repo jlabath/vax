@@ -179,18 +179,18 @@ impl HeaderFieldInfo {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct CasesByVacStatus {
-    id: i64,
+    pub id: i64,
     pub date: NaiveDate,
-    covid19_cases_unvac: i64,
-    covid19_cases_partial_vac: i64,
-    covid19_cases_full_vac: i64,
-    covid19_cases_vac_unknown: i64,
+    pub covid19_cases_unvac: i64,
+    pub covid19_cases_partial_vac: i64,
+    pub covid19_cases_full_vac: i64,
+    pub covid19_cases_vac_unknown: i64,
     pub cases_unvac_rate_per100k: Decimal,
-    cases_partial_vac_rate_per100k: Decimal,
+    pub cases_partial_vac_rate_per100k: Decimal,
     pub cases_full_vac_rate_per100k: Decimal,
-    cases_unvac_rate_7ma: Decimal,
-    cases_partial_vac_rate_7ma: Decimal,
-    cases_full_vac_rate_7ma: Decimal,
+    pub cases_unvac_rate_7ma: Decimal,
+    pub cases_partial_vac_rate_7ma: Decimal,
+    pub cases_full_vac_rate_7ma: Decimal,
 }
 
 impl Default for CasesByVacStatus {
