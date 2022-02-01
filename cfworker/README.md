@@ -39,3 +39,7 @@ Read more about this on the [`workers-rs` project README](https://github.com/clo
 If you have any problems with the `worker` crate, please open an issue on the upstream project 
 issue tracker on the [`workers-rs` repository](https://github.com/cloudflare/workers-rs).
 
+## Benchmarks
+
+it is possible to bechmark functions that do not require specific webassembly targets
+cargo bench --bench my_benchmark -- --verbose

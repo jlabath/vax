@@ -57,59 +57,7 @@ static SIMPLETOP: &str = r#"<!DOCTYPE html>
     <title>vax.labath.ca</title>
     <link rel="stylesheet" href="/style.css">"#;
 
-static REPORT_JS: &str = r#"
-    <script>
-      window.onload = (event) => {
-        var slider = document.getElementById("dayRange");
-        slider.onchange = (event) => {
-          let url = "/di/"+slider.value+"/";
-          window.location.assign(url);
-        };
-      };
-    </script>
-  </head>
-  <body>"#;
-
 static BOTTOM: &str = r#"</body></html>"#;
-
-static TABLE: &str = r#"
-<h3>Report for _DATE_VAR_</h3>
-<h3>Covid-19 per capita comparison by vaccination status in Ontario, Canada.</h3>
-<div>
-<table>
-  <tr>
-    <td>Rate per 100,000</td>
-    <td>0 doses</td>
-    <td>2 doses</td>
-  </tr>
-  <tr>
-    <td><a href="/ch/ca/">Tested positive</a></td>
-    <th>_INF_RATE_UNVAX_</th>
-    <th>_INF_RATE_2VAX_</th>
-  </tr>
-  <tr>
-    <td><a href="/ch/ni/">Hospitalized not in ICU</a></td>
-    <th>_HOSP_RATE_UNVAX_</th>
-    <th>_HOSP_RATE_2VAX_</th>
-  </tr>
-  <tr>
-    <td><a href="/ch/ii/">Hospitalized in ICU</a></td>
-    <th>_ICU_RATE_UNVAX_</th>
-    <th>_ICU_RATE_2VAX_</th>
-  </tr>
-</table>
-</div>
-<div class="slidecontainer">
-  <input type="range" min="0" max="_MAX_RANGE_VAR_" value="_CUR_RANGE_VAR_" class="slider" id="dayRange">
-</div>
-<div id="nav_buttons">
-_PREV_VAR_
-_NEXT_VAR_
-</div>
-
-<div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
-<div id="updated"><h5>Last updated: _UPDATED_VAR_</h5></div>
-"#;
 
 fn dec_to_string(d: Decimal) -> String {
     d.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
@@ -121,67 +69,6 @@ async fn index_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let index = get_index(&kv).await?;
     let report = get_report(&kv, &index.most_recent()).await?;
     render_report(&index, &report)
-}
-
-pub fn render_report_str_old(index: &Index, report: &DayReport) -> String {
-    let body = String::from(TABLE);
-    let date = report.cases.date.format("%A, %-d %B, %C%y").to_string();
-    let updated = index.updated.to_rfc2822();
-    let body = body.replace("_DATE_VAR_", &date);
-    let body = body.replace(
-        "_INF_RATE_UNVAX_",
-        &dec_to_string(report.cases.cases_unvac_rate_per100k),
-    );
-    let body = body.replace(
-        "_INF_RATE_2VAX_",
-        &dec_to_string(report.cases.cases_full_vac_rate_per100k),
-    );
-    let body = body.replace(
-        "_ICU_RATE_UNVAX_",
-        &dec_to_string(report.icu_unvac_rate_per100k()),
-    );
-    let body = body.replace(
-        "_ICU_RATE_2VAX_",
-        &dec_to_string(report.icu_full_vac_rate_per100k()),
-    );
-    let body = body.replace(
-        "_HOSP_RATE_UNVAX_",
-        &dec_to_string(report.nonicu_unvac_rate_per100k()),
-    );
-    let body = body.replace(
-        "_HOSP_RATE_2VAX_",
-        &dec_to_string(report.nonicu_full_vac_rate_per100k()),
-    );
-    let body = body.replace("_MAX_RANGE_VAR_", &index.max_idx().to_string());
-    let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
-    let body = body.replace("_CUR_RANGE_VAR_", &idx.to_string());
-
-    let prev = match index.prev(report.key()) {
-        Some(prev) => {
-            let mut s = String::from("<A HREF=\"/d/");
-            s.push_str(&prev);
-            s.push_str("/\">Previous</A>");
-            s
-        }
-        None => "".to_string(),
-    };
-    let body = body.replace("_PREV_VAR_", &prev);
-    let next = match index.next(report.key()) {
-        Some(next) => {
-            let mut s = String::from("<A HREF=\"/d/");
-            s.push_str(&next);
-            s.push_str("/\">Next</A>");
-            s
-        }
-        None => "".to_string(),
-    };
-    let body = body.replace("_NEXT_VAR_", &next);
-    let body = body.replace("_UPDATED_VAR_", &updated);
-    let mut body = body;
-    body.insert_str(0, SIMPLETOP);
-    body.insert_str(SIMPLETOP.len(), REPORT_JS);
-    body.push_str(BOTTOM);
-    body
 }
 
 pub fn render_report_str(index: &Index, report: &DayReport) -> String {
@@ -214,7 +101,18 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
         None => "".to_string(),
     };
     format!(
-        r#"{SIMPLETOP}{REPORT_JS}
+        r#"{SIMPLETOP}
+    <script>
+      window.onload = (event) => {{
+        var slider = document.getElementById("dayRange");
+        slider.onchange = (event) => {{
+          let url = "/di/"+slider.value+"/";
+          window.location.assign(url);
+        }};
+      }};
+    </script>
+  </head>
+<body>
 <h3>Report for {date}</h3>
 <h3>Covid-19 per capita comparison by vaccination status in Ontario, Canada.</h3>
 <div>
