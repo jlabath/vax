@@ -143,8 +143,8 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
   <input type="range" min="0" max="{max_idx}" value="{idx}" class="slider" id="dayRange">
 </div>
 <div id="nav_buttons">
-{next}
 {prev}
+{next}
 </div>
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
 <div id="updated"><h5>Last updated: {updated}</h5></div>
