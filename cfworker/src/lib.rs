@@ -8,7 +8,7 @@ fn log_request(req: &Request) {
         Date::now().to_string(),
         req.path(),
         req.cf().coordinates().unwrap_or_default(),
-        req.cf().region().unwrap_or("unknown region".into())
+        req.cf().region().unwrap_or_else(|| "unknown region".into())
     );
 }
 
@@ -304,7 +304,7 @@ async fn chart_response(
     dose0: &str,
     dose2: &str,
 ) -> Result<Response> {
-    let labels = get_kvval(&kv, "labels").await?;
+    let labels = get_kvval(kv, "labels").await?;
     let mut body = String::with_capacity(1024 * 5); //5k
     body.push_str(SIMPLETOP);
     body.push_str(
@@ -324,7 +324,7 @@ async fn chart_response(
   const dose2 = "#,
     );
     body.push_str(dose2);
-    body.push_str(";");
+    body.push(';');
     body.push_str(CHART_JS);
     body.push_str("</script></head><body>");
     body.push_str(title);

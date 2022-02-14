@@ -129,11 +129,7 @@ fn main() -> Result<()> {
 }
 
 fn chart_float(n: Decimal) -> f64 {
-    match n
-        .round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+    n.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         .to_f64()
-    {
-        Some(f) => f,
-        None => 0.0,
-    }
+        .unwrap_or(0.0)
 }
