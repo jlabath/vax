@@ -2,6 +2,9 @@ use ontariopublic::{DayReport, Index};
 use rust_decimal::{Decimal, RoundingStrategy};
 use worker::*;
 
+//how long in seconds to cache key value store get results for
+const TTL_CACHE: u64 = 60;
+
 fn log_request(req: &Request) {
     console_log!(
         "{} - [{}], located at: {:?}, within: {}",
@@ -27,6 +30,7 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let res = router
         .get_async("/", index_view)
         .get_async("/d/:date/", day_view)
+        .get_async("/dd/:date/", day_detail_view)
         .get_async("/di/:idx/", idx_view)
         .get_async("/ch/ca/", chart_cases_view)
         .get_async("/ch/ni/", chart_nonicu_view)
@@ -68,7 +72,8 @@ async fn index_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let kv = ctx.kv("VAXKV")?;
     let index = get_index(&kv).await?;
     let report = get_report(&kv, &index.most_recent()).await?;
-    render_report(&index, &report)
+    let body = render_report_str(&index, &report);
+    craft_response("text/html", &body)
 }
 
 pub fn render_report_str(index: &Index, report: &DayReport) -> String {
@@ -82,6 +87,7 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
     let max_idx = index.max_idx();
     let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
+    let cur_key = report.key();
     let prev = match index.prev(report.key()) {
         Some(prev) => {
             let mut s = String::from("<A HREF=\"/d/");
@@ -114,8 +120,9 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
   </head>
 <body>
 <h3>Report for {date}</h3>
-<h3>Covid-19 per capita comparison by vaccination status in Ontario, Canada.</h3>
-<div>
+<h3>COVID-19 per capita comparison by vaccination status in Ontario, Canada.</h3>
+<div><a href="/dd/{cur_key}/">Click here for detailed report</a></div>
+<div id="main">
 <table>
   <tr>
     <td>Rate per 100,000</td>
@@ -153,18 +160,228 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
     )
 }
 
-fn render_report(index: &Index, report: &DayReport) -> Result<Response> {
-    let body = render_report_str(index, report);
-    craft_response("text/html", &body)
+pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
+    let date = report.cases.date.format("%A, %-d %B, %C%y").to_string();
+    let updated = index.updated.to_rfc2822();
+    let inf_rate_unvax = dec_to_string(report.cases.cases_unvac_rate_per100k);
+    let inf_rate_2vax = dec_to_string(report.cases.cases_full_vac_rate_per100k);
+    let inf_rate_1vax = dec_to_string(report.cases.cases_partial_vac_rate_per100k);
+    let inf_rate_unvax_ma = dec_to_string(report.cases.cases_unvac_rate_7ma);
+    let inf_rate_2vax_ma = dec_to_string(report.cases.cases_full_vac_rate_7ma);
+    let inf_rate_1vax_ma = dec_to_string(report.cases.cases_partial_vac_rate_7ma);
+    let icu_rate_unvax = dec_to_string(report.icu_unvac_rate_per100k());
+    let icu_rate_1vax = dec_to_string(report.icu_partial_vac_rate_per100k());
+    let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
+    let hosp_rate_unvax = dec_to_string(report.nonicu_unvac_rate_per100k());
+    let hosp_rate_1vax = dec_to_string(report.nonicu_partial_vac_rate_per100k());
+    let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
+    let cases_unvax = report.cases.covid19_cases_unvac.to_string();
+    let cases_partial_vax = report.cases.covid19_cases_partial_vac.to_string();
+    let cases_full_vax = report.cases.covid19_cases_full_vac.to_string();
+    let cases_unknown_vax = report.cases.covid19_cases_vac_unknown.to_string();
+    let icu_unvax = report.hosps.icu_unvac.to_string();
+    let icu_1vax = report.hosps.icu_partial_vac.to_string();
+    let icu_2vax = report.hosps.icu_full_vac.to_string();
+    let hosp_unvax = report.hosps.hospitalnonicu_unvac.to_string();
+    let hosp_1vax = report.hosps.hospitalnonicu_partial_vac.to_string();
+    let hosp_2vax = report.hosps.hospitalnonicu_full_vac.to_string();
+    let pop_unvax = report
+        .cases
+        .calc_unvac_population()
+        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+        .to_string();
+    let pop_1vax = report
+        .cases
+        .calc_partial_vac_population()
+        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+        .to_string();
+    let pop_2vax = report
+        .cases
+        .calc_full_vac_population()
+        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+        .to_string();
+    let prev = match index.prev(report.key()) {
+        Some(prev) => {
+            let mut s = String::from("<A HREF=\"/dd/");
+            s.push_str(&prev);
+            s.push_str("/\">Previous</A>");
+            s
+        }
+        None => "".to_string(),
+    };
+    let next = match index.next(report.key()) {
+        Some(next) => {
+            let mut s = String::from("<A HREF=\"/dd/");
+            s.push_str(&next);
+            s.push_str("/\">Next</A>");
+            s
+        }
+        None => "".to_string(),
+    };
+    let cur_key = report.key();
+    format!(
+        r#"{SIMPLETOP}
+  </head>
+<body>
+<h3>Detailed report for {date}, Ontario, Canada.</h3>
+<div>
+<a href="/d/{cur_key}/">Back to compare view</a>
+<h3>COVID-19 cases by vaccination status</h3>
+<table>
+  <tr>
+    <td>Unvaccinated</td>
+    <td>{cases_unvax}</td>
+    <td>Number of people who tested positive for COVID-19 on this date. Individuals are considered unvaccinated if they have not had a dose, or if their first dose was less than fourteen days ago.</td>
+  </tr>
+  <tr>
+    <td>Partially Vaccinated</td>
+    <td>{cases_partial_vax}</td>
+    <td>Number of people who tested positive for COVID-19 on this date.  Individuals are considered partially vaccinated if they have had one dose at least fourteen days ago, or two doses where the second dose was less than fourteen days ago.</td>
+  </tr>
+  <tr>
+    <td>Fully vaccinated</td>
+    <td>{cases_full_vax}</td>
+    <td>Number of people who tested positive for COVID-19 on this date. Individuals are considered fully vaccinated if they have had two doses and the second dose was at least fourteen days ago.</td>
+  </tr>
+  <tr>
+    <td>Unknown vaccination status</td>
+    <td>{cases_unknown_vax}</td>
+    <td>Number of people who tested positive for COVID-19 on this date, but their vaccination status is unknown.</td>
+  </tr>
+  <tr>
+    <td>Unvaccinated rate per 100,000</td>
+    <td>{inf_rate_unvax}</td>
+    <td>Rate of COVID-19 cases per 100,000 of unvaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
+  </tr>
+  <tr>
+    <td>Partially vaccinated rate per 100,000</td>
+    <td>{inf_rate_1vax}</td>
+    <td>Rate of COVID-19 cases per 100,000 of partially vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
+  </tr>
+  <tr>
+    <td>Fully vaccinated rate per 100,000</td>
+    <td>{inf_rate_2vax}</td>
+    <td>Rate of COVID-19 cases per 100,000 of fully vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
+  </tr>
+  <tr>
+    <td>Unvaccinated rate per 100,000 (7 day moving average)</td>
+    <td>{inf_rate_unvax_ma}</td>
+    <td>The average rate of COVID-19 cases per 100,000 for the previous 7 days for this vaccination status.</td>
+  </tr>
+  <tr>
+    <td>Partially vaccinated rate per 100,000 (7 day moving average)</td>
+    <td>{inf_rate_1vax_ma}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>Fully vaccinated rate per 100,000 (7 day moving average)</td>
+    <td>{inf_rate_2vax_ma}</td>
+    <td>&#x3003;</td>
+  </tr>
+</table>
+<h3>COVID-19 hospitalizations by vaccination status</h3>
+<h5>Due to incomplete weekend and holiday reporting, vaccination status data for hospital and ICU admissions is not updated on Sundays, Mondays and the day after holidays.</h5>
+<table>
+ <tr>
+    <td>Unvaccinated hospitalized but not in ICU</td>
+    <td>{hosp_unvax}</td>
+    <td>Number of people admitted to a hospital but not requiring a stay in ICU. In order to understand the vaccination status of patients currently hospitalized, a new data collection process was developed and this may cause discrepancies between other hospitalization numbers being collected using a different data collection process.</td>
+  </tr>
+ <tr>
+    <td>Partially vaccinated hospitalized but not in ICU</td>
+    <td>{hosp_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+ <tr>
+    <td>Fully vaccinated hospitalized but not in ICU</td>
+    <td>{hosp_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>Unvaccinated in ICU</td>
+    <td>{icu_unvax}</td>
+    <td>Number of people hospitalized in ICU with COVID-19. Data on patients in ICU are being collected from two different data sources with different extraction times and public reporting cycles. The existing data source (Critical Care Information System, CCIS) does not have vaccination status.</td>
+  </tr>
+ <tr>
+    <td>Partially vaccinated in ICU</td>
+    <td>{icu_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+ <tr>
+    <td>Fully vaccinated in ICU</td>
+    <td>{icu_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+</table>
+<h3>Computed metrics based on government data above</h3>
+<h5>The per 100,000 scale is used when the more commonly used per cent (per hundred) scale would result in very small decimal numbers. E.g. 1 in 100,000 equals 0.001%, or 1000 in 100,000 equals 1% of the population.</h5>
+<table>
+  <tr>
+    <td>Number of unvaccinated people in Ontario</td>
+    <td>{pop_unvax}</td>
+    <td>Calculated as case count for this vaccination status times 100,000 and then divided by rate and rounded.</td>
+  </tr>
+  <tr>
+    <td>Number of partially vaccinated people in Ontario</td>
+    <td>{pop_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>Number of fully vaccinated people in Ontario</td>
+    <td>{pop_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>Non ICU hospitalization rate of unvaccinated per 100,000</td>
+    <td>{hosp_rate_unvax}</td>
+    <td>Calculated as number of non ICU hospitalizations for this vaccination status times 100,000 and then divided by the population for this vaccination status.</td>
+  </tr>
+  <tr>
+    <td>Non ICU hospitalization rate of partially vaccinated per 100,000</td>
+    <td>{hosp_rate_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>Non ICU hospitalization rate of fully vaccinated per 100,000</td>
+    <td>{hosp_rate_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>ICU hospitalization rate of unvaccinated per 100,000</td>
+    <td>{icu_rate_unvax}</td>
+    <td>Calculated as number of ICU hospitalizations for this vaccination status times 100,000 and then divided by the population for this vaccination status.</td>
+  </tr>
+  <tr>
+    <td>ICU hospitalization rate of partially vaccinated per 100,000</td>
+    <td>{icu_rate_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td>ICU hospitalization rate of fully vaccinated per 100,000</td>
+    <td>{icu_rate_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+</table>
+<a href="/d/{cur_key}/">Back to compare view</a>
+</div>
+<div id="nav_buttons">
+{prev}
+{next}
+</div>
+<div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
+<div id="updated"><h5>Last updated: {updated}</h5></div>
+{BOTTOM}
+"#
+    )
 }
 
 async fn get_index(kv: &kv::KvStore) -> Result<Index> {
-    let index_opt = kv.get("index").json().await?;
+    let index_opt = kv.get("index").cache_ttl(TTL_CACHE).json().await?;
     index_opt.ok_or_else(|| "Could not fetch index".into())
 }
 
 async fn get_report(kv: &kv::KvStore, key: &str) -> Result<DayReport> {
-    let opt = kv.get(key).json().await?;
+    let opt = kv.get(key).cache_ttl(TTL_CACHE).json().await?;
     opt.ok_or_else(|| {
         let mut msg = String::from("Could not fetch report: ");
         msg.push_str(key);
@@ -178,7 +395,21 @@ async fn day_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
             let kv = ctx.kv("VAXKV")?;
             let index = get_index(&kv).await?;
             let report = get_report(&kv, key).await?;
-            render_report(&index, &report)
+            let body = render_report_str(&index, &report);
+            craft_response("text/html", &body)
+        }
+        None => Response::error("Bad Request", 400),
+    }
+}
+
+async fn day_detail_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+    match ctx.param("date") {
+        Some(key) => {
+            let kv = ctx.kv("VAXKV")?;
+            let index = get_index(&kv).await?;
+            let report = get_report(&kv, key).await?;
+            let body = render_detail_report_str(&index, &report);
+            craft_response("text/html", &body)
         }
         None => Response::error("Bad Request", 400),
     }
@@ -195,7 +426,8 @@ async fn idx_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
                     None => "fail".to_string(),
                 };
                 let report = get_report(&kv, &key).await?;
-                render_report(&index, &report)
+                let body = render_report_str(&index, &report);
+                craft_response("text/html", &body)
             } else {
                 Response::error("Bad Request", 400)
             }
@@ -251,6 +483,9 @@ td, th {
 #dayRange {
   width: 100%;
 }
+#main {
+  margin-top: 1em;
+}
 "#;
 
 fn css_view(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
@@ -262,7 +497,7 @@ async fn chart_cases_view(_req: Request, ctx: RouteContext<()>) -> Result<Respon
     let dose0 = get_kvval(&kv, "cases_dose0").await?;
     let dose2 = get_kvval(&kv, "cases_dose2").await?;
     let title =
-        "<h3>Covid-19 cases by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+        "<h3>COVID-19 cases by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
 }
 
@@ -351,7 +586,7 @@ fn craft_response(content_type: &str, body: &str) -> Result<Response> {
 }
 
 async fn get_kvval(kv: &kv::KvStore, key: &str) -> Result<String> {
-    let value = kv.get(key).text().await?;
+    let value = kv.get(key).cache_ttl(TTL_CACHE).text().await?;
     value.ok_or_else(|| {
         let mut msg = String::from("No such value in keystore -> ");
         msg.push_str(key);
@@ -364,7 +599,7 @@ async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Respo
     let dose0 = get_kvval(&kv, "nonicu_dose0").await?;
     let dose2 = get_kvval(&kv, "nonicu_dose2").await?;
     let title =
-        "<h3>Covid-19 hospitalizations (not in ICU) by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+        "<h3>COVID-19 hospitalizations (not in ICU) by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
 }
 
@@ -373,6 +608,6 @@ async fn chart_icu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response
     let dose0 = get_kvval(&kv, "icu_dose0").await?;
     let dose2 = get_kvval(&kv, "icu_dose2").await?;
     let title =
-        "<h3>Covid-19 hospitalization in ICU by vaccination status per 100,000 people in Ontario, Canada.</h3>";
+        "<h3>COVID-19 hospitalization in ICU by vaccination status per 100,000 people in Ontario, Canada.</h3>";
     chart_response(&kv, title, &dose0, &dose2).await
 }

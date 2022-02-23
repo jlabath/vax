@@ -3,6 +3,8 @@ use rust_decimal::prelude::*;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+const HUNDRED_K: Decimal = Decimal::from_parts(100000, 0, 0, false, 0);
+
 #[derive(Error, Debug)]
 pub enum DataError {
     #[error("unable to parse date `{0}`")]
@@ -196,33 +198,32 @@ impl CasesByVacStatus {
             ));
         };
         let zero = Decimal::new(0, 0);
-        let hundred_k = Decimal::new(100000, 0);
-        if self.cases_unvac_rate_per100k < zero && self.cases_unvac_rate_per100k > hundred_k {
+        if self.cases_unvac_rate_per100k < zero && self.cases_unvac_rate_per100k > HUNDRED_K {
             return Err(DataError::Invalid(
                 self.cases_unvac_rate_per100k.to_string(),
             ));
         };
         if self.cases_partial_vac_rate_per100k < zero
-            && self.cases_partial_vac_rate_per100k > hundred_k
+            && self.cases_partial_vac_rate_per100k > HUNDRED_K
         {
             return Err(DataError::Invalid(
                 self.cases_partial_vac_rate_per100k.to_string(),
             ));
         };
-        if self.cases_full_vac_rate_per100k < zero && self.cases_full_vac_rate_per100k > hundred_k {
+        if self.cases_full_vac_rate_per100k < zero && self.cases_full_vac_rate_per100k > HUNDRED_K {
             return Err(DataError::Invalid(
                 self.cases_full_vac_rate_per100k.to_string(),
             ));
         };
-        if self.cases_unvac_rate_7ma < zero && self.cases_unvac_rate_7ma > hundred_k {
+        if self.cases_unvac_rate_7ma < zero && self.cases_unvac_rate_7ma > HUNDRED_K {
             return Err(DataError::Invalid(self.cases_unvac_rate_7ma.to_string()));
         };
-        if self.cases_partial_vac_rate_7ma < zero && self.cases_partial_vac_rate_7ma > hundred_k {
+        if self.cases_partial_vac_rate_7ma < zero && self.cases_partial_vac_rate_7ma > HUNDRED_K {
             return Err(DataError::Invalid(
                 self.cases_partial_vac_rate_7ma.to_string(),
             ));
         };
-        if self.cases_full_vac_rate_7ma < zero && self.cases_full_vac_rate_7ma > hundred_k {
+        if self.cases_full_vac_rate_7ma < zero && self.cases_full_vac_rate_7ma > HUNDRED_K {
             return Err(DataError::Invalid(self.cases_full_vac_rate_7ma.to_string()));
         };
         Ok(())
@@ -335,12 +336,12 @@ fn compute_total_population_from_cases_and_rate(cases: i64, rate: Decimal) -> De
     //rate is assumed at 100k
     //x * (rate / 100 000) = cases
     //x = cases / (rate / 100 000)
+    //x = (cases * 100 000) / rate
     if rate.is_zero() {
         return Decimal::new(0, 0);
     }
     let case_count = Decimal::new(cases, 0);
-    let hundred_k = Decimal::new(100000, 0);
-    case_count / (rate / hundred_k)
+    (case_count * HUNDRED_K) / rate
 }
 
 #[derive(Deserialize, Serialize, Debug, Default)]
@@ -360,9 +361,8 @@ impl DayReport {
             ));
         }
         //test calculations
-        let hundred_k = Decimal::new(100000, 0);
         let num = (self.cases.calc_unvac_population()
-            * (self.cases.cases_unvac_rate_per100k / hundred_k))
+            * (self.cases.cases_unvac_rate_per100k / HUNDRED_K))
             .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
         if num != Decimal::new(self.cases.covid19_cases_unvac, 0) {
             let msg = format!(
@@ -372,7 +372,7 @@ impl DayReport {
             return Err(DataError::Problem(msg));
         }
         let num = (self.cases.calc_full_vac_population()
-            * (self.cases.cases_full_vac_rate_per100k / hundred_k))
+            * (self.cases.cases_full_vac_rate_per100k / HUNDRED_K))
             .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
         if num != Decimal::new(self.cases.covid19_cases_full_vac, 0) {
             let msg = format!(
@@ -394,26 +394,51 @@ impl DayReport {
     }
 
     pub fn icu_unvac_rate_per100k(&self) -> Decimal {
-        let hundred_k = Decimal::new(100000, 0);
-        (Decimal::new(self.hosps.icu_unvac, 0) * hundred_k) / self.cases.calc_unvac_population()
+        let pop = self.cases.calc_unvac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.icu_unvac, 0) * HUNDRED_K) / pop
     }
 
     pub fn icu_full_vac_rate_per100k(&self) -> Decimal {
-        let hundred_k = Decimal::new(100000, 0);
-        (Decimal::new(self.hosps.icu_full_vac, 0) * hundred_k)
-            / self.cases.calc_full_vac_population()
+        let pop = self.cases.calc_full_vac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.icu_full_vac, 0) * HUNDRED_K) / pop
+    }
+
+    pub fn icu_partial_vac_rate_per100k(&self) -> Decimal {
+        let pop = self.cases.calc_partial_vac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.icu_partial_vac, 0) * HUNDRED_K) / pop
     }
 
     pub fn nonicu_unvac_rate_per100k(&self) -> Decimal {
-        let hundred_k = Decimal::new(100000, 0);
-        (Decimal::new(self.hosps.hospitalnonicu_unvac, 0) * hundred_k)
-            / self.cases.calc_unvac_population()
+        let pop = self.cases.calc_unvac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.hospitalnonicu_unvac, 0) * HUNDRED_K) / pop
     }
 
     pub fn nonicu_full_vac_rate_per100k(&self) -> Decimal {
-        let hundred_k = Decimal::new(100000, 0);
-        (Decimal::new(self.hosps.hospitalnonicu_full_vac, 0) * hundred_k)
-            / self.cases.calc_full_vac_population()
+        let pop = self.cases.calc_full_vac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.hospitalnonicu_full_vac, 0) * HUNDRED_K) / pop
+    }
+
+    pub fn nonicu_partial_vac_rate_per100k(&self) -> Decimal {
+        let pop = self.cases.calc_partial_vac_population();
+        if pop.is_zero() {
+            return Decimal::new(0, 0);
+        }
+        (Decimal::new(self.hosps.hospitalnonicu_partial_vac, 0) * HUNDRED_K) / pop
     }
 }
 
@@ -577,12 +602,12 @@ impl Iterator for HospitalizationByVacStatusRootIterator {
 pub struct HospitalizationByVacStatus {
     id: i64,
     pub date: NaiveDate,
-    icu_unvac: i64,
-    icu_partial_vac: i64,
-    icu_full_vac: i64,
-    hospitalnonicu_unvac: i64,
-    hospitalnonicu_partial_vac: i64,
-    hospitalnonicu_full_vac: i64,
+    pub icu_unvac: i64,
+    pub icu_partial_vac: i64,
+    pub icu_full_vac: i64,
+    pub hospitalnonicu_unvac: i64,
+    pub hospitalnonicu_partial_vac: i64,
+    pub hospitalnonicu_full_vac: i64,
 }
 
 impl Default for HospitalizationByVacStatus {
@@ -722,6 +747,18 @@ mod tests {
         assert_eq!(
             compute_total_population_from_cases_and_rate(cases, rate),
             Decimal::new(200000, 0)
+        );
+        let cases: i64 = 0;
+        let rate = Decimal::from_str("1.0").unwrap();
+        assert_eq!(
+            compute_total_population_from_cases_and_rate(cases, rate),
+            Decimal::new(0, 0)
+        );
+        let cases: i64 = 1;
+        let rate = Decimal::from_str("0.0").unwrap();
+        assert_eq!(
+            compute_total_population_from_cases_and_rate(cases, rate),
+            Decimal::new(0, 0)
         );
     }
 
