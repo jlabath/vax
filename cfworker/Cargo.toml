@@ -22,6 +22,7 @@ default = []
 worker = "0.0.8"
 ontariopublic = { path = "../ontariopublic" }
 rust_decimal = "1.19"
+num-format = "0.4"
 
 [profile.release]
 # Tell `rustc` to optimize for small code size.

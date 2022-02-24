@@ -1,5 +1,6 @@
+use num_format::{Locale, ToFormattedString};
 use ontariopublic::{DayReport, Index};
-use rust_decimal::{Decimal, RoundingStrategy};
+use rust_decimal::{prelude::ToPrimitive, Decimal, RoundingStrategy};
 use worker::*;
 
 //how long in seconds to cache key value store get results for
@@ -66,6 +67,10 @@ static BOTTOM: &str = r#"</body></html>"#;
 fn dec_to_string(d: Decimal) -> String {
     d.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         .to_string()
+}
+
+fn human_string(d: i64) -> String {
+    d.to_formatted_string(&Locale::en)
 }
 
 async fn index_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -175,31 +180,40 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     let hosp_rate_unvax = dec_to_string(report.nonicu_unvac_rate_per100k());
     let hosp_rate_1vax = dec_to_string(report.nonicu_partial_vac_rate_per100k());
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
-    let cases_unvax = report.cases.covid19_cases_unvac.to_string();
-    let cases_partial_vax = report.cases.covid19_cases_partial_vac.to_string();
-    let cases_full_vax = report.cases.covid19_cases_full_vac.to_string();
-    let cases_unknown_vax = report.cases.covid19_cases_vac_unknown.to_string();
-    let icu_unvax = report.hosps.icu_unvac.to_string();
-    let icu_1vax = report.hosps.icu_partial_vac.to_string();
-    let icu_2vax = report.hosps.icu_full_vac.to_string();
-    let hosp_unvax = report.hosps.hospitalnonicu_unvac.to_string();
-    let hosp_1vax = report.hosps.hospitalnonicu_partial_vac.to_string();
-    let hosp_2vax = report.hosps.hospitalnonicu_full_vac.to_string();
-    let pop_unvax = report
-        .cases
-        .calc_unvac_population()
-        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
-        .to_string();
-    let pop_1vax = report
-        .cases
-        .calc_partial_vac_population()
-        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
-        .to_string();
-    let pop_2vax = report
-        .cases
-        .calc_full_vac_population()
-        .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
-        .to_string();
+    let cases_unvax = human_string(report.cases.covid19_cases_unvac);
+    let cases_partial_vax = human_string(report.cases.covid19_cases_partial_vac);
+    let cases_full_vax = human_string(report.cases.covid19_cases_full_vac);
+    let cases_unknown_vax = human_string(report.cases.covid19_cases_vac_unknown);
+    let icu_unvax = human_string(report.hosps.icu_unvac);
+    let icu_1vax = human_string(report.hosps.icu_partial_vac);
+    let icu_2vax = human_string(report.hosps.icu_full_vac);
+    let hosp_unvax = human_string(report.hosps.hospitalnonicu_unvac);
+    let hosp_1vax = human_string(report.hosps.hospitalnonicu_partial_vac);
+    let hosp_2vax = human_string(report.hosps.hospitalnonicu_full_vac);
+    let pop_unvax = human_string(
+        report
+            .cases
+            .calc_unvac_population()
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+            .to_i64()
+            .unwrap_or(0),
+    );
+    let pop_1vax = human_string(
+        report
+            .cases
+            .calc_partial_vac_population()
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+            .to_i64()
+            .unwrap_or(0),
+    );
+    let pop_2vax = human_string(
+        report
+            .cases
+            .calc_full_vac_population()
+            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+            .to_i64()
+            .unwrap_or(0),
+    );
     let prev = match index.prev(report.key()) {
         Some(prev) => {
             let mut s = String::from("<A HREF=\"/dd/");
@@ -229,53 +243,53 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
 <h3>COVID-19 cases by vaccination status</h3>
 <table>
   <tr>
-    <td>Unvaccinated</td>
-    <td>{cases_unvax}</td>
+    <td class="label">Unvaccinated</td>
+    <td class="num">{cases_unvax}</td>
     <td>Number of people who tested positive for COVID-19 on this date. Individuals are considered unvaccinated if they have not had a dose, or if their first dose was less than fourteen days ago.</td>
   </tr>
   <tr>
-    <td>Partially Vaccinated</td>
-    <td>{cases_partial_vax}</td>
+    <td class="label">Partially Vaccinated</td>
+    <td class="num">{cases_partial_vax}</td>
     <td>Number of people who tested positive for COVID-19 on this date.  Individuals are considered partially vaccinated if they have had one dose at least fourteen days ago, or two doses where the second dose was less than fourteen days ago.</td>
   </tr>
   <tr>
-    <td>Fully vaccinated</td>
-    <td>{cases_full_vax}</td>
+    <td class="label">Fully vaccinated</td>
+    <td class="num">{cases_full_vax}</td>
     <td>Number of people who tested positive for COVID-19 on this date. Individuals are considered fully vaccinated if they have had two doses and the second dose was at least fourteen days ago.</td>
   </tr>
   <tr>
-    <td>Unknown vaccination status</td>
-    <td>{cases_unknown_vax}</td>
+    <td class="label">Unknown vaccination status</td>
+    <td class="num">{cases_unknown_vax}</td>
     <td>Number of people who tested positive for COVID-19 on this date, but their vaccination status is unknown.</td>
   </tr>
   <tr>
-    <td>Unvaccinated rate per 100,000</td>
-    <td>{inf_rate_unvax}</td>
+    <td class="label">Unvaccinated rate per 100,000</td>
+    <td class="num">{inf_rate_unvax}</td>
     <td>Rate of COVID-19 cases per 100,000 of unvaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
   </tr>
   <tr>
-    <td>Partially vaccinated rate per 100,000</td>
-    <td>{inf_rate_1vax}</td>
+    <td class="label">Partially vaccinated rate per 100,000</td>
+    <td class="num">{inf_rate_1vax}</td>
     <td>Rate of COVID-19 cases per 100,000 of partially vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
   </tr>
   <tr>
-    <td>Fully vaccinated rate per 100,000</td>
-    <td>{inf_rate_2vax}</td>
+    <td class="label">Fully vaccinated rate per 100,000</td>
+    <td class="num">{inf_rate_2vax}</td>
     <td>Rate of COVID-19 cases per 100,000 of fully vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
   </tr>
   <tr>
-    <td>Unvaccinated rate per 100,000 (7 day moving average)</td>
-    <td>{inf_rate_unvax_ma}</td>
+    <td class="label">Unvaccinated rate per 100,000 (7 day moving average)</td>
+    <td class="num">{inf_rate_unvax_ma}</td>
     <td>The average rate of COVID-19 cases per 100,000 for the previous 7 days for this vaccination status.</td>
   </tr>
   <tr>
-    <td>Partially vaccinated rate per 100,000 (7 day moving average)</td>
-    <td>{inf_rate_1vax_ma}</td>
+    <td class="label">Partially vaccinated rate per 100,000 (7 day moving average)</td>
+    <td class="num">{inf_rate_1vax_ma}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>Fully vaccinated rate per 100,000 (7 day moving average)</td>
-    <td>{inf_rate_2vax_ma}</td>
+    <td class="label">Fully vaccinated rate per 100,000 (7 day moving average)</td>
+    <td class="num">{inf_rate_2vax_ma}</td>
     <td>&#x3003;</td>
   </tr>
 </table>
@@ -283,33 +297,33 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
 <h5>Due to incomplete weekend and holiday reporting, vaccination status data for hospital and ICU admissions is not updated on Sundays, Mondays and the day after holidays.</h5>
 <table>
  <tr>
-    <td>Unvaccinated hospitalized but not in ICU</td>
-    <td>{hosp_unvax}</td>
+    <td class="label">Unvaccinated hospitalized but not in ICU</td>
+    <td class="num">{hosp_unvax}</td>
     <td>Number of people admitted to a hospital but not requiring a stay in ICU. In order to understand the vaccination status of patients currently hospitalized, a new data collection process was developed and this may cause discrepancies between other hospitalization numbers being collected using a different data collection process.</td>
   </tr>
  <tr>
-    <td>Partially vaccinated hospitalized but not in ICU</td>
-    <td>{hosp_1vax}</td>
+    <td class="label">Partially vaccinated hospitalized but not in ICU</td>
+    <td class="num">{hosp_1vax}</td>
     <td>&#x3003;</td>
   </tr>
  <tr>
-    <td>Fully vaccinated hospitalized but not in ICU</td>
-    <td>{hosp_2vax}</td>
+    <td class="label">Fully vaccinated hospitalized but not in ICU</td>
+    <td class="num">{hosp_2vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>Unvaccinated in ICU</td>
-    <td>{icu_unvax}</td>
+    <td class="label">Unvaccinated in ICU</td>
+    <td class="num">{icu_unvax}</td>
     <td>Number of people hospitalized in ICU with COVID-19. Data on patients in ICU are being collected from two different data sources with different extraction times and public reporting cycles. The existing data source (Critical Care Information System, CCIS) does not have vaccination status.</td>
   </tr>
  <tr>
-    <td>Partially vaccinated in ICU</td>
-    <td>{icu_1vax}</td>
+    <td class="label">Partially vaccinated in ICU</td>
+    <td class="num">{icu_1vax}</td>
     <td>&#x3003;</td>
   </tr>
  <tr>
-    <td>Fully vaccinated in ICU</td>
-    <td>{icu_2vax}</td>
+    <td class="label">Fully vaccinated in ICU</td>
+    <td class="num">{icu_2vax}</td>
     <td>&#x3003;</td>
   </tr>
 </table>
@@ -317,48 +331,48 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
 <h5>The per 100,000 scale is used when the more commonly used per cent (per hundred) scale would result in very small decimal numbers. E.g. 1 in 100,000 equals 0.001%, or 1000 in 100,000 equals 1% of the population.</h5>
 <table>
   <tr>
-    <td>Number of unvaccinated people in Ontario</td>
-    <td>{pop_unvax}</td>
+    <td class="label">Number of unvaccinated people in Ontario</td>
+    <td class="num">{pop_unvax}</td>
     <td>Calculated as case count for this vaccination status times 100,000 and then divided by rate and rounded.</td>
   </tr>
   <tr>
-    <td>Number of partially vaccinated people in Ontario</td>
-    <td>{pop_1vax}</td>
+    <td class="label">Number of partially vaccinated people in Ontario</td>
+    <td class="num">{pop_1vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>Number of fully vaccinated people in Ontario</td>
-    <td>{pop_2vax}</td>
+    <td class="label">Number of fully vaccinated people in Ontario</td>
+    <td class="num">{pop_2vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>Non ICU hospitalization rate of unvaccinated per 100,000</td>
-    <td>{hosp_rate_unvax}</td>
+    <td class="label">Non ICU hospitalization rate of unvaccinated per 100,000</td>
+    <td class="num">{hosp_rate_unvax}</td>
     <td>Calculated as number of non ICU hospitalizations for this vaccination status times 100,000 and then divided by the population for this vaccination status.</td>
   </tr>
   <tr>
-    <td>Non ICU hospitalization rate of partially vaccinated per 100,000</td>
-    <td>{hosp_rate_1vax}</td>
+    <td class="label">Non ICU hospitalization rate of partially vaccinated per 100,000</td>
+    <td class="num">{hosp_rate_1vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>Non ICU hospitalization rate of fully vaccinated per 100,000</td>
-    <td>{hosp_rate_2vax}</td>
+    <td class="label">Non ICU hospitalization rate of fully vaccinated per 100,000</td>
+    <td class="num">{hosp_rate_2vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>ICU hospitalization rate of unvaccinated per 100,000</td>
-    <td>{icu_rate_unvax}</td>
+    <td class="label">ICU hospitalization rate of unvaccinated per 100,000</td>
+    <td class="num">{icu_rate_unvax}</td>
     <td>Calculated as number of ICU hospitalizations for this vaccination status times 100,000 and then divided by the population for this vaccination status.</td>
   </tr>
   <tr>
-    <td>ICU hospitalization rate of partially vaccinated per 100,000</td>
-    <td>{icu_rate_1vax}</td>
+    <td class="label">ICU hospitalization rate of partially vaccinated per 100,000</td>
+    <td class="num">{icu_rate_1vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
-    <td>ICU hospitalization rate of fully vaccinated per 100,000</td>
-    <td>{icu_rate_2vax}</td>
+    <td class="label">ICU hospitalization rate of fully vaccinated per 100,000</td>
+    <td class="num">{icu_rate_2vax}</td>
     <td>&#x3003;</td>
   </tr>
 </table>
@@ -451,6 +465,12 @@ td, th {
   text-align: center;
   padding: 1em;
   vertical-align: middle;
+}
+td.label {
+  text-align: left;
+}
+td.num {
+  text-align: right;
 }
 .slidecontainer {
   height: 4em;
