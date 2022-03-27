@@ -110,9 +110,9 @@ fn main() -> Result<()> {
         labels.push(r.cases.date.format("%Y-%m-%d").to_string());
         cases_dose0.push(chart_float(r.cases.cases_unvac_rate_per100k));
         cases_dose2.push(chart_float(r.cases.cases_full_vac_rate_per100k));
-        hosp_dose0.push(chart_float(r.nonicu_unvac_rate_per100k()));
+        hosp_dose0.push(chart_float_opt(r.nonicu_unvac_rate_per100k()));
         hosp_dose2.push(chart_float(r.nonicu_full_vac_rate_per100k()));
-        icu_dose0.push(chart_float(r.icu_unvac_rate_per100k()));
+        icu_dose0.push(chart_float_opt(r.icu_unvac_rate_per100k()));
         icu_dose2.push(chart_float(r.icu_full_vac_rate_per100k()));
     }
     //now add the index
@@ -161,6 +161,14 @@ fn chart_float(n: Decimal) -> f64 {
     n.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         .to_f64()
         .unwrap_or(0.0)
+}
+
+fn chart_float_opt(inp: Option<Decimal>) -> Option<f64> {
+    inp.map(|n| {
+        n.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
+            .to_f64()
+            .unwrap_or(0.0)
+    })
 }
 
 fn cases_by_vac_status(

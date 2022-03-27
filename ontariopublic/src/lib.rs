@@ -141,7 +141,7 @@ impl HeaderFieldInfo {
 pub struct CasesByVacStatus {
     pub id: i64,
     pub date: NaiveDate,
-    pub covid19_cases_unvac: i64,
+    pub covid19_cases_unvac: Option<i64>,
     pub covid19_cases_partial_vac: i64,
     pub covid19_cases_full_vac: i64,
     pub covid19_cases_vac_unknown: i64,
@@ -178,8 +178,11 @@ impl CasesByVacStatus {
         if self.date < NaiveDate::from_ymd(2020, 7, 1) {
             return Err(DataError::Invalid(self.date.format("%Y-%m-%d").to_string()));
         };
-        if self.covid19_cases_unvac < 0 {
-            return Err(DataError::Invalid(self.covid19_cases_unvac.to_string()));
+        if self.covid19_cases_unvac.unwrap_or(0) < 0 {
+            return Err(DataError::Invalid(
+                self.covid19_cases_unvac
+                    .map_or("".to_string(), |x| x.to_string()),
+            ));
         };
         if self.covid19_cases_partial_vac < 0 {
             return Err(DataError::Invalid(
@@ -226,11 +229,14 @@ impl CasesByVacStatus {
         Ok(())
     }
 
-    pub fn calc_unvac_population(&self) -> Decimal {
-        compute_total_population_from_cases_and_rate(
-            self.covid19_cases_unvac,
-            self.cases_unvac_rate_per100k,
-        )
+    pub fn calc_unvac_population(&self) -> Option<Decimal> {
+        match self.covid19_cases_unvac {
+            Some(cases) => Some(compute_total_population_from_cases_and_rate(
+                cases,
+                self.cases_unvac_rate_per100k,
+            )),
+            _ => None,
+        }
     }
 
     pub fn calc_full_vac_population(&self) -> Decimal {
@@ -267,7 +273,7 @@ fn transform_record(record: &[serde_json::Value]) -> Result<CasesByVacStatus> {
     //get cases unvac
     if let Some(rv) = record.get(2) {
         if let Some(snum) = rv.as_str() {
-            v.covid19_cases_unvac = snum.parse::<i64>()?;
+            v.covid19_cases_unvac = snum.parse::<i64>().ok();
         }
     };
     //get cases partial vac
@@ -358,17 +364,18 @@ impl DayReport {
             ));
         }
         //test calculations
-        let num = (self.cases.calc_unvac_population()
-            * (self.cases.cases_unvac_rate_per100k / HUNDRED_K))
-            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
-        if num != Decimal::new(self.cases.covid19_cases_unvac, 0) {
-            let msg = format!(
-                "The unvac cases for {} did not match calculated: {} expected: {}",
-                self.key(),
-                num,
-                self.cases.covid19_cases_unvac
-            );
-            return Err(DataError::Problem(msg));
+        if let Some(unvac_population) = self.cases.calc_unvac_population() {
+            let num = (unvac_population * (self.cases.cases_unvac_rate_per100k / HUNDRED_K))
+                .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+            if num != Decimal::new(self.cases.covid19_cases_unvac.unwrap_or(0), 0) {
+                let msg = format!(
+                    "The unvac cases for {} did not match calculated: {} expected: {}",
+                    self.key(),
+                    num,
+                    self.cases.covid19_cases_unvac.unwrap_or(0),
+                );
+                return Err(DataError::Problem(msg));
+            }
         }
         let num = (self.cases.calc_full_vac_population()
             * (self.cases.cases_full_vac_rate_per100k / HUNDRED_K))
@@ -392,12 +399,14 @@ impl DayReport {
         DayReport { cases, hosps }
     }
 
-    pub fn icu_unvac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_unvac_population();
-        if pop.is_zero() {
-            return Decimal::new(0, 0);
-        }
-        (Decimal::new(self.hosps.icu_unvac, 0) * HUNDRED_K) / pop
+    pub fn icu_unvac_rate_per100k(&self) -> Option<Decimal> {
+        let calc_pop = self.cases.calc_unvac_population();
+        calc_pop.map(|pop| {
+            if pop.is_zero() {
+                return Decimal::new(0, 0);
+            }
+            (Decimal::new(self.hosps.icu_unvac, 0) * HUNDRED_K) / pop
+        })
     }
 
     pub fn icu_full_vac_rate_per100k(&self) -> Decimal {
@@ -416,12 +425,13 @@ impl DayReport {
         (Decimal::new(self.hosps.icu_partial_vac, 0) * HUNDRED_K) / pop
     }
 
-    pub fn nonicu_unvac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_unvac_population();
-        if pop.is_zero() {
-            return Decimal::new(0, 0);
-        }
-        (Decimal::new(self.hosps.hospitalnonicu_unvac, 0) * HUNDRED_K) / pop
+    pub fn nonicu_unvac_rate_per100k(&self) -> Option<Decimal> {
+        self.cases.calc_unvac_population().map(|pop| {
+            if pop.is_zero() {
+                return Decimal::new(0, 0);
+            }
+            (Decimal::new(self.hosps.hospitalnonicu_unvac, 0) * HUNDRED_K) / pop
+        })
     }
 
     pub fn nonicu_full_vac_rate_per100k(&self) -> Decimal {
@@ -748,7 +758,7 @@ pub struct CsvCase {
 fn transform_csv_record(r: &CsvCase) -> Result<CasesByVacStatus> {
     let mut v: CasesByVacStatus = Default::default();
     v.date = NaiveDate::parse_from_str(&r.date, "%Y-%m-%d")?;
-    v.covid19_cases_unvac = r.covid19_cases_unvac.unwrap_or(0);
+    v.covid19_cases_unvac = r.covid19_cases_unvac;
     v.covid19_cases_partial_vac = r.covid19_cases_partial_vac.unwrap_or(0);
     v.covid19_cases_full_vac = r.covid19_cases_full_vac;
     v.covid19_cases_vac_unknown = r.covid19_cases_vac_unknown.unwrap_or(0);

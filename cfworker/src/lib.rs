@@ -86,9 +86,13 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
     let updated = index.updated.to_rfc2822();
     let inf_rate_unvax = dec_to_string(report.cases.cases_unvac_rate_per100k);
     let inf_rate_2vax = dec_to_string(report.cases.cases_full_vac_rate_per100k);
-    let icu_rate_unvax = dec_to_string(report.icu_unvac_rate_per100k());
+    let icu_rate_unvax = report
+        .icu_unvac_rate_per100k()
+        .map_or_else(|| String::from(""), dec_to_string);
     let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
-    let hosp_rate_unvax = dec_to_string(report.nonicu_unvac_rate_per100k());
+    let hosp_rate_unvax = report
+        .nonicu_unvac_rate_per100k()
+        .map_or_else(|| String::from(""), dec_to_string);
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
     let max_idx = index.max_idx();
     let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
@@ -174,13 +178,20 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     let inf_rate_unvax_ma = dec_to_string(report.cases.cases_unvac_rate_7ma);
     let inf_rate_2vax_ma = dec_to_string(report.cases.cases_full_vac_rate_7ma);
     let inf_rate_1vax_ma = dec_to_string(report.cases.cases_partial_vac_rate_7ma);
-    let icu_rate_unvax = dec_to_string(report.icu_unvac_rate_per100k());
+    let icu_rate_unvax = report
+        .icu_unvac_rate_per100k()
+        .map_or_else(|| String::from("N/A"), dec_to_string);
     let icu_rate_1vax = dec_to_string(report.icu_partial_vac_rate_per100k());
     let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
-    let hosp_rate_unvax = dec_to_string(report.nonicu_unvac_rate_per100k());
+    let hosp_rate_unvax = report
+        .nonicu_unvac_rate_per100k()
+        .map_or_else(|| String::from("N/A"), dec_to_string);
     let hosp_rate_1vax = dec_to_string(report.nonicu_partial_vac_rate_per100k());
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
-    let cases_unvax = human_string(report.cases.covid19_cases_unvac);
+    let cases_unvax = report
+        .cases
+        .covid19_cases_unvac
+        .map_or_else(|| String::from("N/A"), human_string);
     let cases_partial_vax = human_string(report.cases.covid19_cases_partial_vac);
     let cases_full_vax = human_string(report.cases.covid19_cases_full_vac);
     let cases_unknown_vax = human_string(report.cases.covid19_cases_vac_unknown);
@@ -190,13 +201,15 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     let hosp_unvax = human_string(report.hosps.hospitalnonicu_unvac);
     let hosp_1vax = human_string(report.hosps.hospitalnonicu_partial_vac);
     let hosp_2vax = human_string(report.hosps.hospitalnonicu_full_vac);
-    let pop_unvax = human_string(
-        report
-            .cases
-            .calc_unvac_population()
-            .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
-            .to_i64()
-            .unwrap_or(0),
+    let pop_unvax = report.cases.calc_unvac_population().map_or_else(
+        || String::from("N/A"),
+        |v| {
+            human_string(
+                v.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+                    .to_i64()
+                    .unwrap_or(0),
+            )
+        },
     );
     let pop_1vax = human_string(
         report
