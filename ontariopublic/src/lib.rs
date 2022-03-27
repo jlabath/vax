@@ -175,9 +175,6 @@ impl Default for CasesByVacStatus {
 impl CasesByVacStatus {
     //checks the struct for sanity
     pub fn validate(&self) -> Result<()> {
-        if self.id < 1 {
-            return Err(DataError::Invalid(self.id.to_string()));
-        };
         if self.date < NaiveDate::from_ymd(2020, 7, 1) {
             return Err(DataError::Invalid(self.date.format("%Y-%m-%d").to_string()));
         };
@@ -366,8 +363,10 @@ impl DayReport {
             .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
         if num != Decimal::new(self.cases.covid19_cases_unvac, 0) {
             let msg = format!(
-                "The unvac cases did not match calculated: {} expected: {}",
-                num, self.cases.covid19_cases_unvac
+                "The unvac cases for {} did not match calculated: {} expected: {}",
+                self.key(),
+                num,
+                self.cases.covid19_cases_unvac
             );
             return Err(DataError::Problem(msg));
         }
@@ -712,6 +711,89 @@ fn transform_hosp_record(record: &[serde_json::Value]) -> Result<Hospitalization
 
     let _ = v.validate()?;
     Ok(v)
+}
+
+//"Date","covid19_cases_unvac","covid19_cases_partial_vac","covid19_cases_full_vac","covid19_cases_vac_unknown","cases_unvac_rate_per100K","cases_partial_vac_rate_per100K","cases_full_vac_rate_per100K","cases_unvac_rate_7ma","cases_partial_vac_rate_7ma","cases_full_vac_rate_7ma"
+
+//new version
+//"Date","covid19_cases_unvac","covid19_cases_partial_vac","covid19_cases_notfull_vac","covid19_cases_full_vac","covid19_cases_boost_vac","covid19_cases_vac_unknown","cases_unvac_rate_per100K","cases_partial_vac_rate_per100K","cases_notfull_vac_rate_per100K","cases_full_vac_rate_per100K","cases_boost_vac_rate_per100K","cases_unvac_rate_7ma","cases_partial_vac_rate_7ma","cases_notfull_vac_rate_7ma","cases_full_vac_rate_7ma","cases_boost_vac_rate_7ma"
+
+#[derive(Deserialize, Debug)]
+pub struct CsvCase {
+    #[serde(rename(deserialize = "Date"))]
+    pub date: String,
+    pub covid19_cases_unvac: Option<i64>,
+    pub covid19_cases_partial_vac: Option<i64>,
+    pub covid19_cases_notfull_vac: Option<i64>,
+    pub covid19_cases_full_vac: i64,
+    pub covid19_cases_boost_vac: Option<i64>,
+    pub covid19_cases_vac_unknown: Option<i64>,
+    #[serde(rename(deserialize = "cases_unvac_rate_per100K"))]
+    pub cases_unvac_rate_per100k: Option<Decimal>,
+    #[serde(rename(deserialize = "cases_partial_vac_rate_per100K"))]
+    pub cases_partial_vac_rate_per100k: Option<Decimal>,
+    #[serde(rename(deserialize = "cases_notfull_vac_rate_per100K"))]
+    pub cases_notfull_vac_rate_per100k: Option<Decimal>,
+    #[serde(rename(deserialize = "cases_full_vac_rate_per100K"))]
+    pub cases_full_vac_rate_per100k: Option<Decimal>,
+    #[serde(rename(deserialize = "cases_boost_vac_rate_per100K"))]
+    pub cases_boost_vac_rate_per100k: Option<Decimal>,
+    pub cases_unvac_rate_7ma: Option<Decimal>,
+    pub cases_partial_vac_rate_7ma: Option<Decimal>,
+    pub cases_notfull_vac_rate_7ma: Option<Decimal>,
+    pub cases_full_vac_rate_7ma: Option<Decimal>,
+    pub cases_boost_vac_rate_7ma: Option<Decimal>,
+}
+
+fn transform_csv_record(r: &CsvCase) -> Result<CasesByVacStatus> {
+    let mut v: CasesByVacStatus = Default::default();
+    v.date = NaiveDate::parse_from_str(&r.date, "%Y-%m-%d")?;
+    v.covid19_cases_unvac = r.covid19_cases_unvac.unwrap_or(0);
+    v.covid19_cases_partial_vac = r.covid19_cases_partial_vac.unwrap_or(0);
+    v.covid19_cases_full_vac = r.covid19_cases_full_vac;
+    v.covid19_cases_vac_unknown = r.covid19_cases_vac_unknown.unwrap_or(0);
+    v.cases_unvac_rate_per100k = r.cases_unvac_rate_per100k.unwrap_or_else(Decimal::zero);
+    v.cases_partial_vac_rate_per100k = r
+        .cases_partial_vac_rate_per100k
+        .unwrap_or_else(Decimal::zero);
+    v.cases_full_vac_rate_per100k = r.cases_full_vac_rate_per100k.unwrap_or_else(Decimal::zero);
+    v.cases_unvac_rate_7ma = r.cases_unvac_rate_7ma.unwrap_or_else(Decimal::zero);
+    v.cases_partial_vac_rate_7ma = r.cases_partial_vac_rate_7ma.unwrap_or_else(Decimal::zero);
+    v.cases_full_vac_rate_7ma = r.cases_full_vac_rate_7ma.unwrap_or_else(Decimal::zero);
+    Ok(v)
+}
+
+#[derive(Debug)]
+pub struct CsvCasesRoot(pub Vec<CsvCase>);
+
+impl IntoIterator for CsvCasesRoot {
+    type Item = Result<CasesByVacStatus>;
+    type IntoIter = CsvCasesRootIterator;
+
+    fn into_iter(self) -> Self::IntoIter {
+        CsvCasesRootIterator {
+            records: self.0,
+            index: 0,
+        }
+    }
+}
+
+pub struct CsvCasesRootIterator {
+    records: Vec<CsvCase>,
+    index: usize,
+}
+
+impl Iterator for CsvCasesRootIterator {
+    type Item = Result<CasesByVacStatus>;
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.records.get(self.index) {
+            Some(rec) => {
+                self.index += 1;
+                Some(transform_csv_record(rec))
+            }
+            None => None,
+        }
+    }
 }
 
 #[cfg(test)]

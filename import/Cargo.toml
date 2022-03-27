@@ -11,3 +11,5 @@ serde_json = "1.0.67"
 ontariopublic = { path = "../ontariopublic" }
 serde = { version = "1.0", features = ["derive"] }
 rust_decimal = "1.19"
+clap = "3.1"
+csv = "1.1"

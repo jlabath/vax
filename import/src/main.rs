@@ -1,5 +1,9 @@
-use anyhow::{Context, Result};
-use ontariopublic::{CasesByVacStatusRoot, DayReport, HospitalizationByVacStatusRoot, Index};
+use anyhow::{anyhow, Context, Result};
+use clap::{Arg, Command};
+use ontariopublic::{
+    CasesByVacStatus, CasesByVacStatusRoot, CsvCase, CsvCasesRoot, DayReport,
+    HospitalizationByVacStatusRoot, Index,
+};
 use rust_decimal::prelude::*;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -7,6 +11,7 @@ use std::fs::File;
 use std::io::BufReader;
 
 const FNAME: &str = "cases_by_vac_status.json";
+const CSV_FNAME: &str = "cases_by_vac_status.csv";
 const HFNAME: &str = "hosp_by_vac_status.json";
 const OUTFNAME: &str = "bulk.json";
 
@@ -17,12 +22,21 @@ struct Entry {
 }
 
 fn main() -> Result<()> {
-    let f = File::open(FNAME).with_context(|| format!("Failed to read from {}", FNAME))?;
-    let br = BufReader::new(f);
-    let cases_by_vac: CasesByVacStatusRoot =
-        serde_json::from_reader(br).with_context(|| format!("Failed to deserialize {}", FNAME))?;
-    //validate the root object of cases
-    cases_by_vac.validate()?;
+    let matches = Command::new("VaxImport")
+        .version("0.1")
+        .author("Jakub Labath. <jakub@labath.ca>")
+        .about("Serializes Ontario Health data into a format we can use")
+        .arg(
+            Arg::new("cases file")
+                .long("cases")
+                .help("What file to use as source of cases by vaccination")
+                .takes_value(true)
+                .possible_values([FNAME, CSV_FNAME])
+                .default_value(FNAME),
+        )
+        .get_matches();
+
+    let cases_by_vac = cases_by_vac_status(matches.value_of("cases file"))?;
     let f_hosp = File::open(HFNAME).with_context(|| format!("Failed to read from {}", HFNAME))?;
     let br_hosp = BufReader::new(f_hosp);
     let hosp_by_vac: HospitalizationByVacStatusRoot = serde_json::from_reader(br_hosp)
@@ -55,16 +69,29 @@ fn main() -> Result<()> {
     //iterate cases to to create dayreports use the map to add data
     for r in cases_by_vac {
         match r {
-            Ok(cases) => match hosp_map.remove(&cases.date) {
-                Some(hosps) => {
-                    let report = DayReport::from(cases, hosps);
-                    report.validate()?;
-                    reports.push(report);
+            Ok(cases) => {
+                let check = cases.validate();
+                if check.is_err() {
+                    println!(
+                        "Skipping processing invalid cases {:?} due to {:?}",
+                        &cases, check
+                    );
+                    continue;
                 }
-                None => {
-                    println!("Error did not find hospitalization for {}", cases.date);
+                match hosp_map.remove(&cases.date) {
+                    Some(hosps) => {
+                        let report = DayReport::from(cases, hosps);
+                        if let Err(e) = report.validate() {
+                            println!("Skipping  invalid report {} due to {:?}", report.key(), e);
+                            continue;
+                        }
+                        reports.push(report);
+                    }
+                    None => {
+                        println!("Error did not find hospitalization for {}", cases.date);
+                    }
                 }
-            },
+            }
             Err(err) => {
                 println!("Error when iterating cases_by_vac {:?} {}", err, err);
             }
@@ -134,4 +161,36 @@ fn chart_float(n: Decimal) -> f64 {
     n.round_dp_with_strategy(2, RoundingStrategy::MidpointAwayFromZero)
         .to_f64()
         .unwrap_or(0.0)
+}
+
+fn cases_by_vac_status(
+    fname: Option<&str>,
+) -> Result<Box<dyn Iterator<Item = ontariopublic::Result<CasesByVacStatus>>>> {
+    match fname {
+        Some(FNAME) => {
+            let f = File::open(FNAME).with_context(|| format!("Failed to read from {}", FNAME))?;
+            let br = BufReader::new(f);
+            let cases_by_vac: CasesByVacStatusRoot = serde_json::from_reader(br)
+                .with_context(|| format!("Failed to deserialize {}", FNAME))?;
+            //validate the root object of cases
+            cases_by_vac.validate()?;
+            Ok(Box::new(cases_by_vac.into_iter()))
+        }
+        Some(CSV_FNAME) => {
+            let mut cases = vec![];
+            let fname = CSV_FNAME;
+            let f = File::open(fname).with_context(|| format!("Failed to read from {}", fname))?;
+            let br = BufReader::new(f);
+            let mut reader = csv::Reader::from_reader(br);
+
+            for record in reader.deserialize() {
+                let record: CsvCase = record.context("Reading data into Case struct failed")?;
+                //println!("It is a {:?}.", record);
+                cases.push(record);
+            }
+
+            Ok(Box::new(CsvCasesRoot(cases).into_iter()))
+        }
+        _ => Err(anyhow!("Invalid value for cases param {:?}", fname)),
+    }
 }
