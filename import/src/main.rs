@@ -32,7 +32,7 @@ fn main() -> Result<()> {
                 .help("What file to use as source of cases by vaccination")
                 .takes_value(true)
                 .possible_values([FNAME, CSV_FNAME])
-                .default_value(FNAME),
+                .default_value(CSV_FNAME),
         )
         .get_matches();
 
@@ -108,7 +108,7 @@ fn main() -> Result<()> {
         entries.push(entry);
         //charts
         labels.push(r.cases.date.format("%Y-%m-%d").to_string());
-        cases_dose0.push(chart_float(r.cases.cases_unvac_rate_per100k));
+        cases_dose0.push(chart_float_opt(r.cases.cases_unvac_rate_per100k));
         cases_dose2.push(chart_float(r.cases.cases_full_vac_rate_per100k));
         hosp_dose0.push(chart_float_opt(r.nonicu_unvac_rate_per100k()));
         hosp_dose2.push(chart_float(r.nonicu_full_vac_rate_per100k()));

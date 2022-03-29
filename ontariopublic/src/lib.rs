@@ -142,15 +142,15 @@ pub struct CasesByVacStatus {
     pub id: i64,
     pub date: NaiveDate,
     pub covid19_cases_unvac: Option<i64>,
-    pub covid19_cases_partial_vac: i64,
+    pub covid19_cases_partial_vac: Option<i64>,
     pub covid19_cases_full_vac: i64,
-    pub covid19_cases_vac_unknown: i64,
-    pub cases_unvac_rate_per100k: Decimal,
-    pub cases_partial_vac_rate_per100k: Decimal,
+    pub covid19_cases_vac_unknown: Option<i64>,
+    pub cases_unvac_rate_per100k: Option<Decimal>,
+    pub cases_partial_vac_rate_per100k: Option<Decimal>,
     pub cases_full_vac_rate_per100k: Decimal,
-    pub cases_unvac_rate_7ma: Decimal,
-    pub cases_partial_vac_rate_7ma: Decimal,
-    pub cases_full_vac_rate_7ma: Decimal,
+    pub cases_unvac_rate_7ma: Option<Decimal>,
+    pub cases_partial_vac_rate_7ma: Option<Decimal>,
+    pub cases_full_vac_rate_7ma: Option<Decimal>,
 }
 
 impl Default for CasesByVacStatus {
@@ -184,57 +184,60 @@ impl CasesByVacStatus {
                     .map_or("".to_string(), |x| x.to_string()),
             ));
         };
-        if self.covid19_cases_partial_vac < 0 {
+        if self.covid19_cases_partial_vac.unwrap_or(0) < 0 {
             return Err(DataError::Invalid(
-                self.covid19_cases_partial_vac.to_string(),
+                self.covid19_cases_partial_vac
+                    .map_or("".to_string(), |x| x.to_string()),
             ));
         };
         if self.covid19_cases_full_vac < 0 {
             return Err(DataError::Invalid(self.covid19_cases_full_vac.to_string()));
         };
-        if self.covid19_cases_vac_unknown < 0 {
+        if self.covid19_cases_vac_unknown.unwrap_or(0) < 0 {
             return Err(DataError::Invalid(
-                self.covid19_cases_vac_unknown.to_string(),
+                self.covid19_cases_vac_unknown
+                    .map_or("".to_string(), |x| x.to_string()),
             ));
         };
         let zero = Decimal::new(0, 0);
-        if self.cases_unvac_rate_per100k < zero && self.cases_unvac_rate_per100k > HUNDRED_K {
-            return Err(DataError::Invalid(
-                self.cases_unvac_rate_per100k.to_string(),
-            ));
+        if let Some(unvac_rate_per100k) = self.cases_unvac_rate_per100k {
+            if unvac_rate_per100k < zero && unvac_rate_per100k > HUNDRED_K {
+                return Err(DataError::Invalid(unvac_rate_per100k.to_string()));
+            }
         };
-        if self.cases_partial_vac_rate_per100k < zero
-            && self.cases_partial_vac_rate_per100k > HUNDRED_K
-        {
-            return Err(DataError::Invalid(
-                self.cases_partial_vac_rate_per100k.to_string(),
-            ));
+        if let Some(partial_vac_rate_per100k) = self.cases_partial_vac_rate_per100k {
+            if partial_vac_rate_per100k < zero && partial_vac_rate_per100k > HUNDRED_K {
+                return Err(DataError::Invalid(partial_vac_rate_per100k.to_string()));
+            }
         };
         if self.cases_full_vac_rate_per100k < zero && self.cases_full_vac_rate_per100k > HUNDRED_K {
             return Err(DataError::Invalid(
                 self.cases_full_vac_rate_per100k.to_string(),
             ));
         };
-        if self.cases_unvac_rate_7ma < zero && self.cases_unvac_rate_7ma > HUNDRED_K {
-            return Err(DataError::Invalid(self.cases_unvac_rate_7ma.to_string()));
+        if let Some(unvac_rate_7ma) = self.cases_unvac_rate_7ma {
+            if unvac_rate_7ma < zero && unvac_rate_7ma > HUNDRED_K {
+                return Err(DataError::Invalid(unvac_rate_7ma.to_string()));
+            }
+        }
+        if let Some(partial_vac_rate_7ma) = self.cases_partial_vac_rate_7ma {
+            if partial_vac_rate_7ma < zero && partial_vac_rate_7ma > HUNDRED_K {
+                return Err(DataError::Invalid(partial_vac_rate_7ma.to_string()));
+            }
         };
-        if self.cases_partial_vac_rate_7ma < zero && self.cases_partial_vac_rate_7ma > HUNDRED_K {
-            return Err(DataError::Invalid(
-                self.cases_partial_vac_rate_7ma.to_string(),
-            ));
-        };
-        if self.cases_full_vac_rate_7ma < zero && self.cases_full_vac_rate_7ma > HUNDRED_K {
-            return Err(DataError::Invalid(self.cases_full_vac_rate_7ma.to_string()));
+        if let Some(full_vac_rate_7ma) = self.cases_full_vac_rate_7ma {
+            if full_vac_rate_7ma < zero && full_vac_rate_7ma > HUNDRED_K {
+                return Err(DataError::Invalid(full_vac_rate_7ma.to_string()));
+            }
         };
         Ok(())
     }
 
     pub fn calc_unvac_population(&self) -> Option<Decimal> {
-        match self.covid19_cases_unvac {
-            Some(cases) => Some(compute_total_population_from_cases_and_rate(
-                cases,
-                self.cases_unvac_rate_per100k,
-            )),
+        match (self.covid19_cases_unvac, self.cases_unvac_rate_per100k) {
+            (Some(cases), Some(unvac_rate_per100k)) => Some(
+                compute_total_population_from_cases_and_rate(cases, unvac_rate_per100k),
+            ),
             _ => None,
         }
     }
@@ -246,11 +249,16 @@ impl CasesByVacStatus {
         )
     }
 
-    pub fn calc_partial_vac_population(&self) -> Decimal {
-        compute_total_population_from_cases_and_rate(
+    pub fn calc_partial_vac_population(&self) -> Option<Decimal> {
+        match (
             self.covid19_cases_partial_vac,
             self.cases_partial_vac_rate_per100k,
-        )
+        ) {
+            (Some(cases), Some(rate_per100k)) => Some(
+                compute_total_population_from_cases_and_rate(cases, rate_per100k),
+            ),
+            _ => None,
+        }
     }
 }
 
@@ -279,7 +287,7 @@ fn transform_record(record: &[serde_json::Value]) -> Result<CasesByVacStatus> {
     //get cases partial vac
     if let Some(rv) = record.get(3) {
         if let Some(snum) = rv.as_str() {
-            v.covid19_cases_partial_vac = snum.parse::<i64>()?;
+            v.covid19_cases_partial_vac = snum.parse::<i64>().ok();
         }
     };
     //get cases full vac
@@ -291,19 +299,19 @@ fn transform_record(record: &[serde_json::Value]) -> Result<CasesByVacStatus> {
     //get cases vac unknown
     if let Some(rv) = record.get(5) {
         if let Some(snum) = rv.as_str() {
-            v.covid19_cases_vac_unknown = snum.parse::<i64>()?;
+            v.covid19_cases_vac_unknown = snum.parse::<i64>().ok();
         }
     };
     //get unvac rate
     if let Some(rv) = record.get(6) {
         if let Some(snum) = rv.as_str() {
-            v.cases_unvac_rate_per100k = Decimal::from_str(snum)?;
+            v.cases_unvac_rate_per100k = Decimal::from_str(snum).map(Some)?;
         }
     };
     //get partial rate
     if let Some(rv) = record.get(7) {
         if let Some(snum) = rv.as_str() {
-            v.cases_partial_vac_rate_per100k = Decimal::from_str(snum)?;
+            v.cases_partial_vac_rate_per100k = Decimal::from_str(snum).map(Some)?;
         }
     };
     //get full rate
@@ -315,19 +323,19 @@ fn transform_record(record: &[serde_json::Value]) -> Result<CasesByVacStatus> {
     //get unvac rate 7ma
     if let Some(rv) = record.get(9) {
         if let Some(snum) = rv.as_str() {
-            v.cases_unvac_rate_7ma = Decimal::from_str(snum)?;
+            v.cases_unvac_rate_7ma = Decimal::from_str(snum).map(Some)?;
         }
     };
     //get partial rate 7ma
     if let Some(rv) = record.get(10) {
         if let Some(snum) = rv.as_str() {
-            v.cases_partial_vac_rate_7ma = Decimal::from_str(snum)?;
+            v.cases_partial_vac_rate_7ma = Decimal::from_str(snum).map(Some)?;
         }
     };
     //get full rate 7ma
     if let Some(rv) = record.get(11) {
         if let Some(snum) = rv.as_str() {
-            v.cases_full_vac_rate_7ma = Decimal::from_str(snum)?;
+            v.cases_full_vac_rate_7ma = Decimal::from_str(snum).map(Some)?;
         }
     };
 
@@ -365,7 +373,12 @@ impl DayReport {
         }
         //test calculations
         if let Some(unvac_population) = self.cases.calc_unvac_population() {
-            let num = (unvac_population * (self.cases.cases_unvac_rate_per100k / HUNDRED_K))
+            let num = (unvac_population
+                * (self
+                    .cases
+                    .cases_unvac_rate_per100k
+                    .unwrap_or_else(Decimal::zero)
+                    / HUNDRED_K))
                 .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
             if num != Decimal::new(self.cases.covid19_cases_unvac.unwrap_or(0), 0) {
                 let msg = format!(
@@ -417,12 +430,13 @@ impl DayReport {
         (Decimal::new(self.hosps.icu_full_vac, 0) * HUNDRED_K) / pop
     }
 
-    pub fn icu_partial_vac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_partial_vac_population();
-        if pop.is_zero() {
-            return Decimal::new(0, 0);
-        }
-        (Decimal::new(self.hosps.icu_partial_vac, 0) * HUNDRED_K) / pop
+    pub fn icu_partial_vac_rate_per100k(&self) -> Option<Decimal> {
+        self.cases.calc_partial_vac_population().map(|pop| {
+            if pop.is_zero() {
+                return Decimal::new(0, 0);
+            }
+            (Decimal::new(self.hosps.icu_partial_vac, 0) * HUNDRED_K) / pop
+        })
     }
 
     pub fn nonicu_unvac_rate_per100k(&self) -> Option<Decimal> {
@@ -442,12 +456,13 @@ impl DayReport {
         (Decimal::new(self.hosps.hospitalnonicu_full_vac, 0) * HUNDRED_K) / pop
     }
 
-    pub fn nonicu_partial_vac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_partial_vac_population();
-        if pop.is_zero() {
-            return Decimal::new(0, 0);
-        }
-        (Decimal::new(self.hosps.hospitalnonicu_partial_vac, 0) * HUNDRED_K) / pop
+    pub fn nonicu_partial_vac_rate_per100k(&self) -> Option<Decimal> {
+        self.cases.calc_partial_vac_population().map(|pop| {
+            if pop.is_zero() {
+                return Decimal::new(0, 0);
+            }
+            (Decimal::new(self.hosps.hospitalnonicu_partial_vac, 0) * HUNDRED_K) / pop
+        })
     }
 }
 
@@ -759,17 +774,15 @@ fn transform_csv_record(r: &CsvCase) -> Result<CasesByVacStatus> {
     let mut v: CasesByVacStatus = Default::default();
     v.date = NaiveDate::parse_from_str(&r.date, "%Y-%m-%d")?;
     v.covid19_cases_unvac = r.covid19_cases_unvac;
-    v.covid19_cases_partial_vac = r.covid19_cases_partial_vac.unwrap_or(0);
+    v.covid19_cases_partial_vac = r.covid19_cases_partial_vac;
     v.covid19_cases_full_vac = r.covid19_cases_full_vac;
-    v.covid19_cases_vac_unknown = r.covid19_cases_vac_unknown.unwrap_or(0);
-    v.cases_unvac_rate_per100k = r.cases_unvac_rate_per100k.unwrap_or_else(Decimal::zero);
-    v.cases_partial_vac_rate_per100k = r
-        .cases_partial_vac_rate_per100k
-        .unwrap_or_else(Decimal::zero);
+    v.covid19_cases_vac_unknown = r.covid19_cases_vac_unknown;
+    v.cases_unvac_rate_per100k = r.cases_unvac_rate_per100k;
+    v.cases_partial_vac_rate_per100k = r.cases_partial_vac_rate_per100k;
     v.cases_full_vac_rate_per100k = r.cases_full_vac_rate_per100k.unwrap_or_else(Decimal::zero);
-    v.cases_unvac_rate_7ma = r.cases_unvac_rate_7ma.unwrap_or_else(Decimal::zero);
-    v.cases_partial_vac_rate_7ma = r.cases_partial_vac_rate_7ma.unwrap_or_else(Decimal::zero);
-    v.cases_full_vac_rate_7ma = r.cases_full_vac_rate_7ma.unwrap_or_else(Decimal::zero);
+    v.cases_unvac_rate_7ma = r.cases_unvac_rate_7ma;
+    v.cases_partial_vac_rate_7ma = r.cases_partial_vac_rate_7ma;
+    v.cases_full_vac_rate_7ma = r.cases_full_vac_rate_7ma;
     Ok(v)
 }
 
