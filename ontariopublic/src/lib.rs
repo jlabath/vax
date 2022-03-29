@@ -143,14 +143,20 @@ pub struct CasesByVacStatus {
     pub date: NaiveDate,
     pub covid19_cases_unvac: Option<i64>,
     pub covid19_cases_partial_vac: Option<i64>,
+    pub covid19_cases_notfull_vac: Option<i64>,
     pub covid19_cases_full_vac: i64,
     pub covid19_cases_vac_unknown: Option<i64>,
+    pub covid19_cases_boost_vac: Option<i64>,
     pub cases_unvac_rate_per100k: Option<Decimal>,
     pub cases_partial_vac_rate_per100k: Option<Decimal>,
+    pub cases_notfull_vac_rate_per100k: Option<Decimal>,
     pub cases_full_vac_rate_per100k: Decimal,
+    pub cases_boost_vac_rate_per100k: Option<Decimal>,
     pub cases_unvac_rate_7ma: Option<Decimal>,
     pub cases_partial_vac_rate_7ma: Option<Decimal>,
+    pub cases_notfull_vac_rate_7ma: Option<Decimal>,
     pub cases_full_vac_rate_7ma: Option<Decimal>,
+    pub cases_boost_vac_rate_7ma: Option<Decimal>,
 }
 
 impl Default for CasesByVacStatus {
@@ -160,14 +166,20 @@ impl Default for CasesByVacStatus {
             date: NaiveDate::from_ymd(2019, 12, 8),
             covid19_cases_unvac: Default::default(),
             covid19_cases_partial_vac: Default::default(),
+            covid19_cases_notfull_vac: Default::default(),
             covid19_cases_full_vac: Default::default(),
+            covid19_cases_boost_vac: Default::default(),
             covid19_cases_vac_unknown: Default::default(),
             cases_unvac_rate_per100k: Default::default(),
             cases_partial_vac_rate_per100k: Default::default(),
+            cases_notfull_vac_rate_per100k: Default::default(),
             cases_full_vac_rate_per100k: Default::default(),
+            cases_boost_vac_rate_per100k: Default::default(),
             cases_unvac_rate_7ma: Default::default(),
             cases_partial_vac_rate_7ma: Default::default(),
+            cases_notfull_vac_rate_7ma: Default::default(),
             cases_full_vac_rate_7ma: Default::default(),
+            cases_boost_vac_rate_7ma: Default::default(),
         }
     }
 }
@@ -253,6 +265,30 @@ impl CasesByVacStatus {
         match (
             self.covid19_cases_partial_vac,
             self.cases_partial_vac_rate_per100k,
+        ) {
+            (Some(cases), Some(rate_per100k)) => Some(
+                compute_total_population_from_cases_and_rate(cases, rate_per100k),
+            ),
+            _ => None,
+        }
+    }
+
+    pub fn calc_notfull_vac_population(&self) -> Option<Decimal> {
+        match (
+            self.covid19_cases_notfull_vac,
+            self.cases_notfull_vac_rate_per100k,
+        ) {
+            (Some(cases), Some(rate_per100k)) => Some(
+                compute_total_population_from_cases_and_rate(cases, rate_per100k),
+            ),
+            _ => None,
+        }
+    }
+
+    pub fn calc_boost_vac_population(&self) -> Option<Decimal> {
+        match (
+            self.covid19_cases_boost_vac,
+            self.cases_boost_vac_rate_per100k,
         ) {
             (Some(cases), Some(rate_per100k)) => Some(
                 compute_total_population_from_cases_and_rate(cases, rate_per100k),
@@ -423,7 +459,13 @@ impl DayReport {
     }
 
     pub fn icu_full_vac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_full_vac_population();
+        //as of march 11, 2022 we need to add the boosted population together with fullvac population
+        let pop = self.cases.calc_full_vac_population()
+            + self
+                .cases
+                .calc_boost_vac_population()
+                .unwrap_or_else(Decimal::zero);
+
         if pop.is_zero() {
             return Decimal::new(0, 0);
         }
@@ -449,10 +491,16 @@ impl DayReport {
     }
 
     pub fn nonicu_full_vac_rate_per100k(&self) -> Decimal {
-        let pop = self.cases.calc_full_vac_population();
+        //as of march 11, 2022 we need to add the boosted population together with fullvac population
+        let pop = self.cases.calc_full_vac_population()
+            + self
+                .cases
+                .calc_boost_vac_population()
+                .unwrap_or_else(Decimal::zero);
         if pop.is_zero() {
             return Decimal::new(0, 0);
         }
+        //full_vac cases include full and boosted - presumably
         (Decimal::new(self.hosps.hospitalnonicu_full_vac, 0) * HUNDRED_K) / pop
     }
 
@@ -771,18 +819,26 @@ pub struct CsvCase {
 }
 
 fn transform_csv_record(r: &CsvCase) -> Result<CasesByVacStatus> {
-    let mut v: CasesByVacStatus = Default::default();
-    v.date = NaiveDate::parse_from_str(&r.date, "%Y-%m-%d")?;
+    let mut v = CasesByVacStatus {
+        date: NaiveDate::parse_from_str(&r.date, "%Y-%m-%d")?,
+        ..Default::default()
+    };
     v.covid19_cases_unvac = r.covid19_cases_unvac;
     v.covid19_cases_partial_vac = r.covid19_cases_partial_vac;
+    v.covid19_cases_notfull_vac = r.covid19_cases_notfull_vac;
     v.covid19_cases_full_vac = r.covid19_cases_full_vac;
+    v.covid19_cases_boost_vac = r.covid19_cases_boost_vac;
     v.covid19_cases_vac_unknown = r.covid19_cases_vac_unknown;
     v.cases_unvac_rate_per100k = r.cases_unvac_rate_per100k;
     v.cases_partial_vac_rate_per100k = r.cases_partial_vac_rate_per100k;
+    v.cases_notfull_vac_rate_per100k = r.cases_notfull_vac_rate_per100k;
     v.cases_full_vac_rate_per100k = r.cases_full_vac_rate_per100k.unwrap_or_else(Decimal::zero);
+    v.cases_boost_vac_rate_per100k = r.cases_boost_vac_rate_per100k;
     v.cases_unvac_rate_7ma = r.cases_unvac_rate_7ma;
     v.cases_partial_vac_rate_7ma = r.cases_partial_vac_rate_7ma;
+    v.cases_notfull_vac_rate_7ma = r.cases_notfull_vac_rate_7ma;
     v.cases_full_vac_rate_7ma = r.cases_full_vac_rate_7ma;
+    v.cases_boost_vac_rate_7ma = r.cases_boost_vac_rate_per100k;
     Ok(v)
 }
 

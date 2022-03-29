@@ -218,7 +218,15 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
         .cases
         .covid19_cases_partial_vac
         .map_or_else(|| String::from("N/A"), human_string);
+    let cases_notfull_vax = report
+        .cases
+        .covid19_cases_notfull_vac
+        .map_or_else(|| String::from("N/A"), human_string);
     let cases_full_vax = human_string(report.cases.covid19_cases_full_vac);
+    let cases_boost_vax = report
+        .cases
+        .covid19_cases_boost_vac
+        .map_or_else(|| String::from("N/A"), human_string);
     let cases_unknown_vax = report
         .cases
         .covid19_cases_vac_unknown
@@ -249,6 +257,16 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
             )
         },
     );
+    let pop_lt_2vax = report.cases.calc_notfull_vac_population().map_or_else(
+        || String::from("N/A"),
+        |v| {
+            human_string(
+                v.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+                    .to_i64()
+                    .unwrap_or(0),
+            )
+        },
+    );
     let pop_2vax = human_string(
         report
             .cases
@@ -256,6 +274,16 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
             .round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
             .to_i64()
             .unwrap_or(0),
+    );
+    let pop_3vax = report.cases.calc_boost_vac_population().map_or_else(
+        || String::from("N/A"),
+        |v| {
+            human_string(
+                v.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero)
+                    .to_i64()
+                    .unwrap_or(0),
+            )
+        },
     );
     let prev = match index.prev(report.key()) {
         Some(prev) => {
@@ -296,9 +324,19 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     <td>Number of people who tested positive for COVID-19 on this date.  Individuals are considered partially vaccinated if they have had one dose at least fourteen days ago, or two doses where the second dose was less than fourteen days ago.</td>
   </tr>
   <tr>
+    <td class="label">Not fully vaccinated (less than 2 doses)</td>
+    <td class="num">{cases_notfull_vax}</td>
+    <td>Number of not fully vaccinated people who tested positive for COVID-19 on this date. Individuals are considered fully vaccinated if they have had two doses and the second dose was at least fourteen days ago. New datapoint as of March 11, 2022.</td>
+  </tr>
+  <tr>
     <td class="label">Fully vaccinated</td>
     <td class="num">{cases_full_vax}</td>
     <td>Number of people who tested positive for COVID-19 on this date. Individuals are considered fully vaccinated if they have had two doses and the second dose was at least fourteen days ago.</td>
+  </tr>
+  <tr>
+    <td class="label">Boosted (3 doses)</td>
+    <td class="num">{cases_boost_vax}</td>
+    <td>Number of boosted people who tested positive for COVID-19 on this date. Individuals are considered fully vaccinated if they have had three doses and the third dose was at least fourteen days ago. New datapoint as of March 11, 2022.</td>
   </tr>
   <tr>
     <td class="label">Unknown vaccination status</td>
@@ -384,8 +422,18 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     <td>&#x3003;</td>
   </tr>
   <tr>
+    <td class="label">Number of not fully vaccinated people in Ontario (less than 2 doses)</td>
+    <td class="num">{pop_lt_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
     <td class="label">Number of fully vaccinated people in Ontario</td>
     <td class="num">{pop_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td class="label">Number of boosted people in Ontario</td>
+    <td class="num">{pop_3vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
