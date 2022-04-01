@@ -88,15 +88,25 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
         .cases
         .cases_unvac_rate_per100k
         .map_or_else(|| String::from("n/a"), dec_to_string);
+    let inf_rate_lt_2vax = report
+        .cases
+        .cases_notfull_vac_rate_per100k
+        .map_or_else(|| String::from("n/a"), dec_to_string);
     let inf_rate_2vax = dec_to_string(report.cases.cases_full_vac_rate_per100k);
     let icu_rate_unvax = report
         .icu_unvac_rate_per100k()
+        .map_or_else(|| String::from("n/a"), dec_to_string);
+    let icu_rate_lt_2vax = report
+        .icu_notfull_vac_rate_per100k()
         .map_or_else(|| String::from("n/a"), dec_to_string);
     let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
     let hosp_rate_unvax = report
         .nonicu_unvac_rate_per100k()
         .map_or_else(|| String::from("n/a"), dec_to_string);
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
+    let hosp_rate_lt_2vax = report
+        .nonicu_notfull_vac_rate_per100k()
+        .map_or_else(|| String::from("n/a"), dec_to_string);
     let max_idx = index.max_idx();
     let idx = index.idx(report.key()).unwrap_or_else(|| index.max_idx());
     let cur_key = report.key();
@@ -139,21 +149,25 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
   <tr>
     <td>Rate per 100,000</td>
     <td>0 doses</td>
+    <td>&lt; 2 doses</td>
     <td>2 doses</td>
   </tr>
   <tr>
     <td><a href="/ch/ca/">Tested positive</a></td>
     <th>{inf_rate_unvax}</th>
+    <th>{inf_rate_lt_2vax}</th>
     <th>{inf_rate_2vax}</th>
   </tr>
   <tr>
     <td><a href="/ch/ni/">Hospitalized not in ICU</a></td>
     <th>{hosp_rate_unvax}</th>
+    <th>{hosp_rate_lt_2vax}</th>
     <th>{hosp_rate_2vax}</th>
   </tr>
   <tr>
     <td><a href="/ch/ii/">Hospitalized in ICU</a></td>
     <th>{icu_rate_unvax}</th>
+    <th>{icu_rate_lt_2vax}</th>
     <th>{icu_rate_2vax}</th>
   </tr>
 </table>
@@ -179,10 +193,18 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
         .cases
         .cases_unvac_rate_per100k
         .map_or_else(|| String::from("N/A"), dec_to_string);
+    let inf_rate_notfull_vax = report
+        .cases
+        .cases_notfull_vac_rate_per100k
+        .map_or_else(|| String::from("N/A"), dec_to_string);
     let inf_rate_2vax = dec_to_string(report.cases.cases_full_vac_rate_per100k);
     let inf_rate_1vax = report
         .cases
         .cases_partial_vac_rate_per100k
+        .map_or_else(|| String::from("N/A"), dec_to_string);
+    let inf_rate_boost_vax = report
+        .cases
+        .cases_boost_vac_rate_per100k
         .map_or_else(|| String::from("N/A"), dec_to_string);
     let inf_rate_unvax_ma = report
         .cases
@@ -196,11 +218,22 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
         .cases
         .cases_partial_vac_rate_7ma
         .map_or_else(|| String::from("N/A"), dec_to_string);
+    let inf_rate_notfull_ma = report
+        .cases
+        .cases_notfull_vac_rate_7ma
+        .map_or_else(|| String::from("N/A"), dec_to_string);
+    let inf_rate_boost_ma = report
+        .cases
+        .cases_boost_vac_rate_7ma
+        .map_or_else(|| String::from("N/A"), dec_to_string);
     let icu_rate_unvax = report
         .icu_unvac_rate_per100k()
         .map_or_else(|| String::from("N/A"), dec_to_string);
     let icu_rate_1vax = report
         .icu_partial_vac_rate_per100k()
+        .map_or_else(|| String::from("N/A"), dec_to_string);
+    let icu_rate_lt_2vax = report
+        .icu_notfull_vac_rate_per100k()
         .map_or_else(|| String::from("N/A"), dec_to_string);
     let icu_rate_2vax = dec_to_string(report.icu_full_vac_rate_per100k());
     let hosp_rate_unvax = report
@@ -208,6 +241,9 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
         .map_or_else(|| String::from("N/A"), dec_to_string);
     let hosp_rate_1vax = report
         .nonicu_partial_vac_rate_per100k()
+        .map_or_else(|| String::from("N/A"), dec_to_string);
+    let hosp_rate_lt_2vax = report
+        .nonicu_notfull_vac_rate_per100k()
         .map_or_else(|| String::from("N/A"), dec_to_string);
     let hosp_rate_2vax = dec_to_string(report.nonicu_full_vac_rate_per100k());
     let cases_unvax = report
@@ -354,9 +390,19 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     <td>Rate of COVID-19 cases per 100,000 of partially vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
   </tr>
   <tr>
+    <td class="label">Not fully vaccinated rate per 100,000</td>
+    <td class="num">{inf_rate_notfull_vax}</td>
+    <td>Rate of COVID-19 cases per 100,000 of not fully vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000). New as of March 11, 2022.</td>
+  </tr>
+  <tr>
     <td class="label">Fully vaccinated rate per 100,000</td>
     <td class="num">{inf_rate_2vax}</td>
     <td>Rate of COVID-19 cases per 100,000 of fully vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000).</td>
+  </tr>
+  <tr>
+    <td class="label">Boosted rate per 100,000</td>
+    <td class="num">{inf_rate_boost_vax}</td>
+    <td>Rate of COVID-19 cases per 100,000 of fully vaccinated people (calculated by dividing the number of cases for a vaccination status, by the total number of people with the same vaccination status and then multiplying by 100,000). New as of March 11, 2022.</td>
   </tr>
   <tr>
     <td class="label">Unvaccinated rate per 100,000 (7 day moving average)</td>
@@ -369,8 +415,18 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     <td>&#x3003;</td>
   </tr>
   <tr>
+    <td class="label">Not fully vaccinated rate per 100,000 (7 day moving average)</td>
+    <td class="num">{inf_rate_notfull_ma}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
     <td class="label">Fully vaccinated rate per 100,000 (7 day moving average)</td>
     <td class="num">{inf_rate_2vax_ma}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td class="label">Boosted rate per 100,000 (7 day moving average)</td>
+    <td class="num">{inf_rate_boost_ma}</td>
     <td>&#x3003;</td>
   </tr>
 </table>
@@ -447,6 +503,11 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
     <td>&#x3003;</td>
   </tr>
   <tr>
+    <td class="label">Non ICU hospitalization rate of not fully vaccinated per 100,000</td>
+    <td class="num">{hosp_rate_lt_2vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
     <td class="label">Non ICU hospitalization rate of fully vaccinated per 100,000</td>
     <td class="num">{hosp_rate_2vax}</td>
     <td>&#x3003;</td>
@@ -459,6 +520,11 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
   <tr>
     <td class="label">ICU hospitalization rate of partially vaccinated per 100,000</td>
     <td class="num">{icu_rate_1vax}</td>
+    <td>&#x3003;</td>
+  </tr>
+  <tr>
+    <td class="label">ICU hospitalization rate of not fully vaccinated per 100,000</td>
+    <td class="num">{icu_rate_lt_2vax}</td>
     <td>&#x3003;</td>
   </tr>
   <tr>
@@ -607,9 +673,10 @@ async fn chart_cases_view(_req: Request, ctx: RouteContext<()>) -> Result<Respon
     let kv = ctx.kv("VAXKV")?;
     let dose0 = get_kvval(&kv, "cases_dose0").await?;
     let dose2 = get_kvval(&kv, "cases_dose2").await?;
+    let dose_lt2 = get_kvval(&kv, "cases_dose_lt2").await?;
     let title =
         "<h3>COVID-19 cases by vaccination status per 100,000 people in Ontario, Canada.</h3>";
-    chart_response(&kv, title, &dose0, &dose2).await
+    chart_response(&kv, title, &dose0, &dose2, &dose_lt2).await
 }
 
 static CHART_JS: &str = r#"
@@ -617,16 +684,22 @@ window.onload = (event) => {
   const data = {
     labels: labels,
     datasets: [{
-      label: 'Population with 0 doses of the vaccine',
+      label: '0 doses',
       data: dose0,
       fill: false,
       borderColor: 'red',
       tension: 0.1
     },{
-      label: 'Population with 2 doses of the vaccine',
+      label: '2 doses',
       data: dose2,
       fill: false,
       borderColor: 'green',
+      tension: 0.1
+    },{
+      label: 'less than 2 doses',
+      data: dose_lt2,
+      fill: false,
+      borderColor: 'maroon',
       tension: 0.1
     }]
   };
@@ -649,6 +722,7 @@ async fn chart_response(
     title: &str,
     dose0: &str,
     dose2: &str,
+    dose_lt2: &str,
 ) -> Result<Response> {
     let labels = get_kvval(kv, "labels").await?;
     let mut body = String::with_capacity(1024 * 5); //5k
@@ -670,6 +744,12 @@ async fn chart_response(
   const dose2 = "#,
     );
     body.push_str(dose2);
+    body.push(';');
+    body.push_str(
+        r#";
+  const dose_lt2 = "#,
+    );
+    body.push_str(dose_lt2);
     body.push(';');
     body.push_str(CHART_JS);
     body.push_str("</script></head><body>");
@@ -709,16 +789,18 @@ async fn chart_nonicu_view(_req: Request, ctx: RouteContext<()>) -> Result<Respo
     let kv = ctx.kv("VAXKV")?;
     let dose0 = get_kvval(&kv, "nonicu_dose0").await?;
     let dose2 = get_kvval(&kv, "nonicu_dose2").await?;
+    let dose_lt2 = get_kvval(&kv, "nonicu_dose_lt2").await?;
     let title =
         "<h3>COVID-19 hospitalizations (not in ICU) by vaccination status per 100,000 people in Ontario, Canada.</h3>";
-    chart_response(&kv, title, &dose0, &dose2).await
+    chart_response(&kv, title, &dose0, &dose2, &dose_lt2).await
 }
 
 async fn chart_icu_view(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let kv = ctx.kv("VAXKV")?;
     let dose0 = get_kvval(&kv, "icu_dose0").await?;
     let dose2 = get_kvval(&kv, "icu_dose2").await?;
+    let dose_lt2 = get_kvval(&kv, "icu_dose_lt2").await?;
     let title =
         "<h3>COVID-19 hospitalization in ICU by vaccination status per 100,000 people in Ontario, Canada.</h3>";
-    chart_response(&kv, title, &dose0, &dose2).await
+    chart_response(&kv, title, &dose0, &dose2, &dose_lt2).await
 }

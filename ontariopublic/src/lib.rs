@@ -481,6 +481,16 @@ impl DayReport {
         })
     }
 
+    pub fn icu_notfull_vac_rate_per100k(&self) -> Option<Decimal> {
+        self.cases.calc_notfull_vac_population().map(|pop| {
+            if pop.is_zero() {
+                return Decimal::zero();
+            }
+            let cases = self.hosps.icu_partial_vac + self.hosps.icu_unvac;
+            (Decimal::new(cases, 0) * HUNDRED_K) / pop
+        })
+    }
+
     pub fn nonicu_unvac_rate_per100k(&self) -> Option<Decimal> {
         self.cases.calc_unvac_population().map(|pop| {
             if pop.is_zero() {
@@ -510,6 +520,16 @@ impl DayReport {
                 return Decimal::new(0, 0);
             }
             (Decimal::new(self.hosps.hospitalnonicu_partial_vac, 0) * HUNDRED_K) / pop
+        })
+    }
+
+    pub fn nonicu_notfull_vac_rate_per100k(&self) -> Option<Decimal> {
+        self.cases.calc_notfull_vac_population().map(|pop| {
+            if pop.is_zero() {
+                return Decimal::zero();
+            }
+            let cases = self.hosps.hospitalnonicu_partial_vac + self.hosps.hospitalnonicu_unvac;
+            (Decimal::new(cases, 0) * HUNDRED_K) / pop
         })
     }
 }

@@ -50,11 +50,14 @@ fn main() -> Result<()> {
     //variables for charts
     let mut labels = vec![];
     let mut cases_dose0 = vec![];
+    let mut cases_dose_lt2 = vec![];
     let mut cases_dose2 = vec![];
     let mut hosp_dose0 = vec![];
     let mut hosp_dose2 = vec![];
+    let mut hosp_dose_lt2 = vec![];
     let mut icu_dose0 = vec![];
     let mut icu_dose2 = vec![];
+    let mut icu_dose_lt2 = vec![];
     //put the hospitalizations in a map
     for r in hosp_by_vac {
         match r {
@@ -109,11 +112,14 @@ fn main() -> Result<()> {
         //charts
         labels.push(r.cases.date.format("%Y-%m-%d").to_string());
         cases_dose0.push(chart_float_opt(r.cases.cases_unvac_rate_per100k));
+        cases_dose_lt2.push(chart_float_opt(r.cases.cases_notfull_vac_rate_per100k));
         cases_dose2.push(chart_float(r.cases.cases_full_vac_rate_per100k));
         hosp_dose0.push(chart_float_opt(r.nonicu_unvac_rate_per100k()));
+        hosp_dose_lt2.push(chart_float_opt(r.nonicu_notfull_vac_rate_per100k()));
         hosp_dose2.push(chart_float(r.nonicu_full_vac_rate_per100k()));
         icu_dose0.push(chart_float_opt(r.icu_unvac_rate_per100k()));
         icu_dose2.push(chart_float(r.icu_full_vac_rate_per100k()));
+        icu_dose_lt2.push(chart_float_opt(r.icu_notfull_vac_rate_per100k()));
     }
     //now add the index
     let index = Index::from(keys.as_slice());
@@ -135,6 +141,10 @@ fn main() -> Result<()> {
         value: serde_json::to_string(&cases_dose2)?,
     });
     entries.push(Entry {
+        key: "cases_dose_lt2".into(),
+        value: serde_json::to_string(&cases_dose_lt2)?,
+    });
+    entries.push(Entry {
         key: "nonicu_dose0".into(),
         value: serde_json::to_string(&hosp_dose0)?,
     });
@@ -143,12 +153,20 @@ fn main() -> Result<()> {
         value: serde_json::to_string(&hosp_dose2)?,
     });
     entries.push(Entry {
+        key: "nonicu_dose_lt2".into(),
+        value: serde_json::to_string(&hosp_dose_lt2)?,
+    });
+    entries.push(Entry {
         key: "icu_dose0".into(),
         value: serde_json::to_string(&icu_dose0)?,
     });
     entries.push(Entry {
         key: "icu_dose2".into(),
         value: serde_json::to_string(&icu_dose2)?,
+    });
+    entries.push(Entry {
+        key: "icu_dose_lt2".into(),
+        value: serde_json::to_string(&icu_dose_lt2)?,
     });
 
     let fout = File::create(OUTFNAME)
