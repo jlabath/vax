@@ -180,7 +180,7 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
 {next}
 </div>
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
-<div id="updated"><h5>Last updated: {updated}</h5></div>
+<div id="updated"><h5>Ontario government: As of June 16, all COVID-19 datasets will be updated weekly on Thursdays by 2pm.<br>Updated: {updated}</h5></div>
 {BOTTOM}
 "#
     )
@@ -540,7 +540,7 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
 {next}
 </div>
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
-<div id="updated"><h5>Last updated: {updated}</h5></div>
+<div id="updated"><h5>Ontario government: As of June 16, all COVID-19 datasets will be updated weekly on Thursdays by 2pm.<br>Updated: {updated}</h5></div>
 {BOTTOM}
 "#
     )
@@ -651,7 +651,7 @@ td.num {
   justify-content: center;
 }
 #updated {
-  height: 4em;
+  height: 6em;
   display: flex;
   align-items: end;
   width: 21em;
