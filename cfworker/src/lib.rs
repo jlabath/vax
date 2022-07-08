@@ -180,7 +180,7 @@ pub fn render_report_str(index: &Index, report: &DayReport) -> String {
 {next}
 </div>
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
-<div id="updated"><h5>Ontario government: As of June 16, all COVID-19 datasets will be updated weekly on Thursdays by 2pm.<br>Updated: {updated}</h5></div>
+<div id="updated"><h5>Ontario government: Please note that Cases by Vaccination Status and Hospitalization by Vaccination Status data will no longer be published as of June 23, 2022.<br>Updated: {updated}</h5></div>
 {BOTTOM}
 "#
     )
@@ -540,7 +540,7 @@ pub fn render_detail_report_str(index: &Index, report: &DayReport) -> String {
 {next}
 </div>
 <div id="footer"><a href="https://github.com/jlabath/vax">source code</a></div>
-<div id="updated"><h5>Ontario government: As of June 16, all COVID-19 datasets will be updated weekly on Thursdays by 2pm.<br>Updated: {updated}</h5></div>
+<div id="updated"><h5>Ontario government: Please note that Cases by Vaccination Status and Hospitalization by Vaccination Status data will no longer be published as of June 23, 2022.<br>Updated: {updated}</h5></div>
 {BOTTOM}
 "#
     )
